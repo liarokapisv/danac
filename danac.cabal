@@ -1,0 +1,76 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.33.0.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: f9360559e6e13762b58743b722406f979521aaefceb9478b97aa2617423af2d5
+
+name:           danac
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/danac#readme>
+homepage:       https://github.com/githubuser/danac#readme
+bug-reports:    https://github.com/githubuser/danac/issues
+author:         Author name here
+maintainer:     example@example.com
+copyright:      2020 Author name here
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    ChangeLog.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/danac
+
+library
+  exposed-modules:
+      Danac.Core.Ast
+      Danac.Parser.Character
+      Danac.Parser.Ast
+      Danac.Parser.Core
+  other-modules:
+      Paths_danac
+  hs-source-dirs:
+      src
+  build-depends:
+      base >=4.7 && <5
+    , megaparsec
+    , text
+  default-language: Haskell2010
+
+executable danac-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_danac
+  hs-source-dirs:
+      app
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , danac
+  default-language: Haskell2010
+
+test-suite danac-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Danac.Parser.Core.FuncIdentifierSpec
+      Danac.Parser.Core.LabelIdentifierSpec
+      Danac.Parser.Core.VarIdentifierSpec
+      Test.Danac.Parser.Identifiers
+      Paths_danac
+  hs-source-dirs:
+      test
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.7 && <5
+    , danac
+    , hspec ==2.*
+    , hspec-megaparsec
+    , megaparsec
+    , text
+  default-language: Haskell2010
+  build-tool-depends: hspec-discover:hspec-discover == 2.*

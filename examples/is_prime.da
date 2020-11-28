@@ -1,0 +1,47 @@
+def main
+    def prime is byte: n as int
+        var i is int
+        if n < 0: return: prime(-n)
+        elif n < 2: return: false
+        elif n = 2: return: true
+        elif n % 2 = 0: return: false
+        else:
+            i := 3
+            loop:
+                if i > n / 2: break
+                elif n % i = 0: return: false
+                i := i + 2
+            return: true
+
+    var limit number counter is int
+
+    writeString: "Limit: "
+    limit := readInteger()
+    writeString: "Primes:\n"
+    counter := 0
+    if limit >= 2:
+        counter := counter + 1
+        writeInteger: 2
+        writeString: "\n"
+    if limit >= 3:
+        counter := counter + 1
+        writeInteger: 3
+        writeString: "\n"
+    number := 5
+    loop:
+        if number > limit: break
+        elif prime(number):
+            counter := counter + 1
+            writeInteger: number
+            writeString: "\n"
+        number := number + 2
+        if number > limit: break
+        elif prime(number):
+            counter := counter + 1
+            writeInteger: number
+            writeString: "\n"
+        number := number + 4
+
+    writeString: "\nTotal: "
+    writeInteger: counter
+    writeString: "\n"

@@ -1,0 +1,61 @@
+name:                danac
+version:             0.1.0.0
+github:              "githubuser/danac"
+license:             BSD3
+author:              "Author name here"
+maintainer:          "example@example.com"
+copyright:           "2020 Author name here"
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/githubuser/danac#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: src
+  exposed-modules:
+  - Danac.Core.Ast
+  - Danac.Parser.Character
+  - Danac.Parser.Ast
+  - Danac.Parser.Core
+  dependencies:
+  - megaparsec
+  - text
+
+executables:
+  danac-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - danac
+
+tests:
+  danac-test:
+    exposed-modules:
+    - Test.Danac.Parser.Identifiers
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - text
+    - danac
+    - megaparsec
+    - hspec-megaparsec
+    defaults: hspec/hspec@master
+
