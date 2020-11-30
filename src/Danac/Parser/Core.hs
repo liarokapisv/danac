@@ -15,7 +15,6 @@ import Danac.Parser.Ast
 import Danac.Parser.Character
 import Control.Monad (when, join)
 
-
 type Parser = Parsec Void Text
 
 space :: Parser ()
@@ -32,25 +31,25 @@ brackets = try . between (symbol "[") (symbol "]")
 dquotes = try . between (symbol "\"") (symbol "\"")
 quotes = try . between (symbol "'") (symbol "'")
 
-lineFeed = C.string "\\n" *> pure ELineFeed
-tab = C.string "\\t" *> pure ETab
-carret = C.string "\\r" *> pure ECarriageReturn
-zero = C.string "\\0" *> pure EZero
-backslash = C.string "\\\\" *> pure EBackslash
-quote = C.string "\\'" *> pure EQuote
-dquote = C.string "\\\"" *> pure EDoubleQuote
+lineFeed = C.char '\n'
+tab = C.char '\t'
+carret = C.char '\r'
+zero = C.char '\0'
+backslash = C.char '\\'
+quote = C.char '\''
+dquote = C.char '\"'
 
-asciicode :: Parser EscapeSequence
+asciicode :: Parser Char
 asciicode = C.string "\\x" *> do
                 x <- C.hexDigitChar
                 y <- C.hexDigitChar
-                pure (EAsciiCode (digitToInt x) (digitToInt y))
+                pure $ chr $ digitToInt x * 16 + digitToInt y
 
-escapeSequence :: Parser Character
-escapeSequence = fmap CEscapeSequence $ lineFeed <|> tab <|> carret <|> zero <|> backslash <|> quote <|> dquote
+escapeSequence :: Parser Char
+escapeSequence = lineFeed <|> tab <|> carret <|> zero <|> backslash <|> quote <|> dquote
 
-usualChar :: Parser Character
-usualChar = fmap CChar $ notFollowedBy (C.char '\\' <|> C.char '\'' <|> C.char '"') *> C.printChar
+usualChar :: Parser Char
+usualChar = notFollowedBy (C.char '\\' <|> C.char '\'' <|> C.char '"') *> C.printChar
     
 character = escapeSequence <|> usualChar
 
@@ -64,51 +63,44 @@ identifier = (lexeme . try) $ region (setErrorOffset 0) $ (p >>= check)
                        then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                        else return x
 
-withSpan :: Parser a -> Parser (a, SourceSpan)
-withSpan p = do
+located :: Parser a -> Parser (Located a)
+located p = do
   p1 <- getSourcePos
   x  <- p
   p2 <- getSourcePos
-  return (x, SS p1 p2)
+  return $ Located { value = x, srcSpan = SS p1 p2 }
 
 mergeSpans :: SourceSpan -> SourceSpan -> SourceSpan
 mergeSpans (SS p11 p12) (SS p21 p22) = SS p11 p22
 
-annotate = withSpan
+labelIdentifier :: Parser (LabelIdentifier PS)
+labelIdentifier = located $ LabelIdentifierPS <$> identifier
 
-labelIdentifier :: Parser (LabelIdentifier ParserAst)
-labelIdentifier = annotate $ 
-    do i <- identifier
-       pure $ LabelIdentifier i
+varIdentifier :: Parser (VarIdentifier PS)
+varIdentifier = located $ VarIdentifierPS <$> identifier
 
-varIdentifier :: Parser (VarIdentifier ParserAst)
-varIdentifier = annotate $ 
-    do i <- identifier
-       pure $ VarIdentifier i
+funcIdentifier :: Parser (FuncIdentifier PS)
+funcIdentifier = located $ FuncIdentifierPS <$> identifier
 
-funcIdentifier :: Parser (FuncIdentifier ParserAst)
-funcIdentifier = annotate $ 
-    do i <- identifier
-       pure $ FuncIdentifier i
-
-{-
-charConst :: Parser (CharConst ParserAst)
-charConst = annotate $ 
+charConst :: Parser (CharConst PS)
+charConst = located $ 
     do c <- quotes character
-       pure $ CharConst c
+       pure $ CharConstPS c
 
-stringLiteral :: Parser (StringLiteral ParserAst)
-stringLiteral = annotate $ 
+stringLiteral :: Parser (StringLiteral PS)
+stringLiteral = located $ 
     do s <- dquotes (many character)
-       pure $ StringLiteral s
+       pure $ StringLiteralPS $ pack s
 
-intConst :: Parser (IntConst ParserAst)
-intConst = annotate $ 
+intConst :: Parser (IntConst PS)
+intConst = located $ 
     do i <- lexeme L.decimal
-       pure $ IntConst i
+       pure $ IntConstPS i
 
 dataType :: Parser DataType 
 dataType = (symbol "int" *> pure Integ) <|> (symbol "byte" *> pure Byte)
+
+{-
 
 objectType :: Parser ObjectType
 objectType = do
@@ -118,7 +110,7 @@ objectType = do
         where go d [] = DType d
               go d ((IntConst n,_) : ns) = AType (go d ns) n
     
-stype :: Parser (Type ParserAst)
+stype :: Parser (Type PS)
 stype = annotate $ 
     try (do otype <- objectType
             symbol "["
@@ -129,7 +121,7 @@ stype = annotate $
         pure $ OType otype)
     
 
-fparType :: Parser (ParPassType ParserAst)
+fparType :: Parser (ParPassType PS)
 fparType = annotate $ 
     (do symbol "ref" 
         t <- stype 
@@ -137,14 +129,14 @@ fparType = annotate $
     (do t <- stype
         pure $ ByDefault t)
            
-fparDefs :: Parser [FparDef ParserAst]
+fparDefs :: Parser [FparDef PS]
 fparDefs = do
         is <- some (annotate varIdentifier)
         symbol "as" 
         f <- fparType
         pure $ [(FparDef i f, span) | (i, span) <- is]
 
-header :: Parser (Header ParserAst)
+header :: Parser (Header PS)
 header = annotate $ 
     do i <- funcIdentifier 
        d <- optional (symbol "is" *> dataType)
@@ -155,13 +147,13 @@ header = annotate $
             Nothing -> pure $ Header i d []
             Just xs -> pure $ Header i d xs
 
-funcDecl :: Parser (FuncDecl ParserAst)
+funcDecl :: Parser (FuncDecl PS)
 funcDecl = annotate $ 
     do symbol "decl"
        h <- header
        pure $ FuncDecl h
 
-varDefs :: Parser [VarDef ParserAst]
+varDefs :: Parser [VarDef PS]
 varDefs = do
        symbol "var"
        ids <- some (annotate varIdentifier)
@@ -169,14 +161,14 @@ varDefs = do
        t <- objectType
        pure $ [(VarDef id t, span) | (id, span) <- ids]
 
-lvalueHead :: Parser (Lvalue ParserAst)
+lvalueHead :: Parser (Lvalue PS)
 lvalueHead = annotate $
     (do id <- varIdentifier
         pure $ LvalueId id) <|>
     (do s <- stringLiteral
         pure $ LvalueStr s) 
 
-lvalue :: Parser (Lvalue ParserAst)
+lvalue :: Parser (Lvalue PS)
 lvalue = do l <- lvalueHead
             exprs <- many (brackets expr)
             pure $ toLvalue l exprs
@@ -184,38 +176,38 @@ lvalue = do l <- lvalueHead
           toLvalue l (e : es) = toLvalue (LvalueAx l e, mergeSpans (snd l) (snd e)) es
 
 
-addOp :: Operator Parser (Expr ParserAst)
+addOp :: Operator Parser (Expr PS)
 addOp = InfixL $ symbol "+" *> pure (\e1 e2 -> (e1 :+ e2, mergeSpans (snd e1) (snd e2)))
 
-mulOp :: Operator Parser (Expr ParserAst)
+mulOp :: Operator Parser (Expr PS)
 mulOp = InfixL $ symbol "*" *> pure (\e1 e2 -> (e1 :* e2, mergeSpans (snd e1) (snd e2)))
 
-subOp :: Operator Parser (Expr ParserAst)
+subOp :: Operator Parser (Expr PS)
 subOp = InfixL $ symbol "-" *> pure (\e1 e2 -> (e1 :- e2, mergeSpans (snd e1) (snd e2)))
 
-divOp :: Operator Parser (Expr ParserAst)
+divOp :: Operator Parser (Expr PS)
 divOp = InfixL $ symbol "/" *> pure (\e1 e2 -> (e1 :/ e2, mergeSpans (snd e1) (snd e2)))
 
-modOp :: Operator Parser (Expr ParserAst)
+modOp :: Operator Parser (Expr PS)
 modOp = InfixL $ symbol "%" *> pure (\e1 e2 -> (e1 :% e2, mergeSpans (snd e1) (snd e2)))
 
-orOp :: Operator Parser (Expr ParserAst)
+orOp :: Operator Parser (Expr PS)
 orOp = InfixL $ symbol "|" *> pure (\e1 e2 -> (e1 :| e2, mergeSpans (snd e1) (snd e2)))
 
-andOp :: Operator Parser (Expr ParserAst)
+andOp :: Operator Parser (Expr PS)
 andOp = InfixL $ symbol "&" *> pure (\e1 e2 -> (e1 :& e2, mergeSpans (snd e1) (snd e2)))
 
-minusOp :: Operator Parser (Expr ParserAst)
+minusOp :: Operator Parser (Expr PS)
 minusOp = Prefix $ do
     (_, a) <- withSpan $ symbol "-" 
     pure (\e -> (ExprSigned Minus e, mergeSpans a (snd e)))
 
-plusOp :: Operator Parser (Expr ParserAst)
+plusOp :: Operator Parser (Expr PS)
 plusOp = Prefix $ do
     (_, a) <- withSpan $ symbol "+"
     pure (\e -> (ExprSigned Plus e, mergeSpans a (snd e)))
 
-notOp :: Operator Parser (Expr ParserAst)
+notOp :: Operator Parser (Expr PS)
 notOp = Prefix $ do
     (_, a) <- withSpan $ symbol "!"
     pure (\e -> (ExprNot e, mergeSpans a (snd e)))
@@ -225,7 +217,7 @@ eoperators = [[notOp, plusOp, minusOp],
              [mulOp, divOp, modOp, andOp],
              [addOp, subOp, orOp]]
 
-exprTerm :: Parser (Expr ParserAst)
+exprTerm :: Parser (Expr PS)
 exprTerm = annotate $ 
     (try $ do f <- funcCall
               pure $ ExprFuncCall f) <|>
@@ -240,29 +232,29 @@ exprTerm = annotate $
     (symbol "true" *> pure ExprTrue) <|>
     (symbol "false" *> pure ExprFalse)
 
-expr :: Parser (Expr ParserAst)
+expr :: Parser (Expr PS)
 expr = makeExprParser exprTerm eoperators
 
-funcCall :: Parser (FuncCall ParserAst)
+funcCall :: Parser (FuncCall PS)
 funcCall = annotate $ 
     do id <- funcIdentifier
        es <- parens (sepBy expr (symbol ","))
        pure $ FuncCall id es
 
-cnotOp :: Operator Parser (Cond ParserAst)
+cnotOp :: Operator Parser (Cond PS)
 cnotOp = Prefix $ 
     do (_, a) <- withSpan $ symbol "not" 
        pure (\c -> (CondNot c, mergeSpans a (snd c)))
 
-corOp :: Operator Parser (Cond ParserAst)
+corOp :: Operator Parser (Cond PS)
 corOp = InfixL $ symbol "or" *> pure (\c1 c2 -> (c1 `Or` c2, mergeSpans (snd c1) (snd c2)))
 
-candOp :: Operator Parser (Cond ParserAst)
+candOp :: Operator Parser (Cond PS)
 candOp = InfixL $ symbol "and" *> pure (\c1 c2 -> (c1 `And` c2, mergeSpans (snd c1) (snd c2)))
 
 coperators = [[cnotOp], [candOp], [corOp]]
 
-condTerm :: Parser (Cond ParserAst)
+condTerm :: Parser (Cond PS)
 condTerm = annotate $ 
     (try $ do e1 <- expr
               symbol "="
@@ -293,17 +285,17 @@ condTerm = annotate $
     (do e <- expr
         pure $ CondExpr e) 
 
-cond :: Parser (Cond ParserAst)
+cond :: Parser (Cond PS)
 cond = makeExprParser condTerm coperators
 
-procCall :: Parser (FuncCall ParserAst)
+procCall :: Parser (FuncCall PS)
 procCall = annotate $ do
     i <- funcIdentifier
     symbol ":"
     es <- sepBy expr (symbol ",")
     pure $ FuncCall i es
 
-stmt :: Parser (Stmt ParserAst)
+stmt :: Parser (Stmt PS)
 stmt = annotate $ 
     (try $ do l <- lvalue
               symbol ":="
@@ -352,7 +344,7 @@ stmt = annotate $
                      pure b
                     
                    
-mblock :: Parser (Block ParserAst)
+mblock :: Parser (Block PS)
 mblock = annotate $ 
     do symbol "begin"
        s <- some stmt
@@ -387,15 +379,15 @@ blocked1 ref p = do (pos, a) <- indented ref p
 blocked :: Pos -> Parser a -> Parser [a]
 blocked ref p = blocked1 ref p <|> pure []
 
-ablock :: Pos -> Parser (Block ParserAst)
+ablock :: Pos -> Parser (Block PS)
 ablock ref = annotate $
     do s <- blocked1 ref stmt
        pure $ Block s
 
-block :: Pos -> Parser (Block ParserAst)
+block :: Pos -> Parser (Block PS)
 block ref = mblock <|> ablock ref
 
-localDefs :: Parser [LocalDef ParserAst]
+localDefs :: Parser [LocalDef PS]
 localDefs = do
     ldfs <- many $ 
                 (do (f, sp) <- funcDecl
@@ -406,7 +398,7 @@ localDefs = do
                     pure $ fmap (\(x,y) -> (LocalDefVarDef (x,y), y)) vs) 
     pure $ join ldfs
 
-funcDef :: Parser (FuncDef ParserAst)
+funcDef :: Parser (FuncDef PS)
 funcDef = annotate $
     do pos <- L.indentLevel 
        symbol "def"
@@ -415,7 +407,7 @@ funcDef = annotate $
        b <- block pos
        pure $ FuncDef h l b
           
-ast :: Parser (Ast ParserAst)
+ast :: Parser (Ast PS)
 ast = annotate $ 
     do f <- funcDef
        eof

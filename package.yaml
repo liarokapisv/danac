@@ -20,13 +20,12 @@ extra-source-files:
 description:         Please see the README on GitHub at <https://github.com/githubuser/danac#readme>
 
 dependencies:
-- base >= 4.7 && < 5
+- base
 
 library:
   source-dirs: src
   exposed-modules:
   - Danac.Core.Ast
-  - Danac.Parser.Character
   - Danac.Parser.Ast
   - Danac.Parser.Core
   dependencies:
@@ -46,8 +45,6 @@ executables:
 
 tests:
   danac-test:
-    exposed-modules:
-    - Test.Danac.Parser.Identifiers
     ghc-options:
     - -threaded
     - -rtsopts
@@ -57,5 +54,6 @@ tests:
     - danac
     - megaparsec
     - hspec-megaparsec
+    - pretty-simple
     defaults: hspec/hspec@master
 

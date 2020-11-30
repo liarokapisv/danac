@@ -1,45 +1,67 @@
-{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, OverloadedLabels, ScopedTypeVariables, UndecidableInstances, TypeFamilies #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Danac.Parser.Ast where
     
-import Danac.Core.Ast 
+import Danac.Core.Ast
 import Text.Megaparsec.Pos
+import Data.Text
 
-data ParserAst
+data PS
 
-data SourceSpan = SS
-    { ssBegin :: !SourcePos
-    , ssEnd :: !SourcePos
-    } deriving Eq
+data SourceSpan = SS SourcePos SourcePos
+    deriving (Eq, Show)
 
-instance Show SourceSpan where
-    show _ = "SS"
+data Located a = Located { value :: a, srcSpan :: SourceSpan }
+    deriving (Eq, Show)
 
-pspan (SS (SourcePos _ line1 col1)  (SourcePos _ line2 col2)) = 
-    "(" ++ show (unPos line1) ++ "," ++ show (unPos col1) 
-        ++"),(" 
-            ++ show (unPos line2) ++ "," ++ show (unPos col2) ++ ")"
+type instance IdP PS = Text
+type instance CharP PS = Char
+type instance StringP PS = Text
+type instance IntP PS = Integer
 
-type instance XVarIdentifier ParserAst = SourceSpan
-type instance XFuncIdentifier ParserAst = SourceSpan
-type instance XLabelIdentifier ParserAst = SourceSpan
-type instance XCharConst ParserAst = SourceSpan
-type instance XStringLiteral ParserAst = SourceSpan
-type instance XIntConst ParserAst = SourceSpan
-type instance XAst ParserAst = SourceSpan
-type instance XFuncDef ParserAst = SourceSpan
-type instance XHeader ParserAst = SourceSpan
-type instance XFparDef ParserAst = SourceSpan
-type instance XType ParserAst = SourceSpan
-type instance XParPassType ParserAst = SourceSpan
-type instance XLocalDef ParserAst = SourceSpan
-type instance XFuncDecl ParserAst = SourceSpan
-type instance XVarDef ParserAst = SourceSpan
-type instance XStmt ParserAst = SourceSpan
-type instance XBlock ParserAst = SourceSpan
-type instance XFuncCall ParserAst = SourceSpan
-type instance XLvalue ParserAst = SourceSpan
-type instance XExpr ParserAst = SourceSpan
-type instance XCond ParserAst = SourceSpan
+type instance XLabelIdentifier PS = ()
+pattern LabelIdentifierPS x = LabelIdentifier () x
 
+type instance XVarIdentifier PS = ()
+pattern FuncIdentifierPS x = FuncIdentifier () x
 
+type instance XFuncIdentifier PS = ()
+pattern VarIdentifierPS x = VarIdentifier () x
+
+type instance XCharConst PS = ()
+pattern CharConstPS x = CharConst () x
+
+type instance XStringLiteral PS = ()
+pattern StringLiteralPS x = StringLiteral () x
+
+type instance XIntConst PS = ()
+pattern IntConstPS x = IntConst () x
+
+type instance XFuncCall PS = ()
+pattern FuncCallPS x y = FuncCall () x y
+
+type instance XLvalue PS = ()
+pattern LvalueIdPS x = LvalueId () x
+pattern LvalueStrPS x = LvalueStr () x
+pattern LvalueAxPS x y = LvalueAx () x y
+
+type instance XExpr PS = ()
+pattern ExprIntConstPS x = ExprIntConst () x
+pattern ExprCharConstPS x = ExprCharConst () x
+pattern ExprLvaluePS x = ExprLvalue () x
+pattern ExprParenPS x = ExprParen () x
+pattern ExprFuncCallPS x = ExprFuncCall () x
+pattern ExprSignedPS x y = ExprSigned () x y
+pattern ExprAddPS x y = ExprAdd () x y
+pattern ExprSubPS x y = ExprSub () x y
+pattern ExprMulPS x y = ExprMul () x y
+pattern ExprDivPS x y = ExprDiv () x y
+pattern ExprModPS x y = ExprMod () x y
+pattern ExprOrPS  x y = ExprOr () x y
+pattern ExprAndPS x y = ExprAnd () x y
+pattern ExprTruePS = ExprTrue ()
+pattern ExprFalsePS = ExprFalse ()
+pattern ExprNotPS x = ExprNot () x
+
+type instance XRec PS a = Located a

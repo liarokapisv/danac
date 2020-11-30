@@ -3,7 +3,6 @@
 
 module Test.Danac.Parser.Identifiers (identifierSpec) where
 
-import Danac.Core.Ast
 import Danac.Parser.Ast
 import Danac.Parser.Core (Parser, labelIdentifier, varIdentifier, funcIdentifier)
 
@@ -13,13 +12,13 @@ import Text.Megaparsec
 import Test.Hspec
 import Test.Hspec.Megaparsec
 
-ignoringExtra :: Either (ParseErrorBundle s e) (a, SourceSpan) -> Either (ParseErrorBundle s e) a
-ignoringExtra = fmap fst
+ignoringExtra :: Either (ParseErrorBundle s e) (Located a) -> Either (ParseErrorBundle s e) a
+ignoringExtra = fmap value
 
 failOnKeyword :: Show a => Parser a -> Text -> Expectation
 failOnKeyword p keyword = parse p "" keyword `shouldFailWith` errFancy 0 (fancy $ ErrorFail ("keyword \"" ++ unpack keyword ++ "\" cannot be an identifier"))
 
-identifierSpec :: (Eq a, Show a) => Parser (a, SourceSpan) -> (Text -> a) -> Spec
+identifierSpec :: (Eq a, Show a) => Parser (Located a) -> (Text -> a) -> Spec
 identifierSpec p wrap = do
      context "when given full identifier" $ do
         it "should parse correctly" $ do
