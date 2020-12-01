@@ -40,11 +40,19 @@ type ForAll (f :: * -> Constraint) z =
     ,f (XRec z (CharConstX z))
     ,f (XRec z (StringLiteralX z))
     ,f (XRec z (IntConstX z))
-    ,f (XRec z (TypeX))
+    ,f (XRec z (AstX z))
+    ,f (XRec z (FuncDefX z))
+    ,f (XRec z (HeaderX z))
+    ,f (XRec z (FparDefX z))
+    ,f (XRec z (DataTypeX))
+    ,f (XRec z (ObjectTypeX z))
+    ,f (XRec z (TypeX z))
+    ,f (XRec z (ParPassTypeX z))
     ,f (XRec z (LocalDefX z))
     ,f (XRec z (FuncDeclX z))
     ,f (XRec z (VarDefX z))
     ,f (XRec z (StmtX z))
+    ,f (XRec z (BlockX z))
     ,f (XRec z (FuncCallX z))
     ,f (XRec z (LvalueX z))
     ,f (XRec z (ExprX z))
@@ -154,64 +162,81 @@ type IntConst z = XRec z (IntConstX z)
 ----------------------------------------------------
 ----------------------------------------------------
 
-data Ast z = Ast (FuncDef z)
+data AstX z = Ast (FuncDef z)
 
-deriving instance (ForAll Eq z) => Eq (Ast z)
-deriving instance (ForAll Show z) => Show (Ast z)
+deriving instance (ForAll Eq z) => Eq (AstX z)
+deriving instance (ForAll Show z) => Show (AstX z)
 
-----------------------------------------------------
-----------------------------------------------------
-
-data FuncDef z = FuncDef (Header z) [LocalDef z] (Block z) 
-
-deriving instance (ForAll Eq z) => Eq (FuncDef z)
-deriving instance (ForAll Show z) => Show (FuncDef z)
+type Ast z = XRec z (AstX z)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data Header z = Header (FuncIdentifier z) (Maybe DataType) [FparDef z]
+data FuncDefX z = FuncDef (Header z) [LocalDef z] (Block z) 
 
-deriving instance (ForAll Eq z) => Eq (Header z)
-deriving instance (ForAll Show z) => Show (Header z)
+deriving instance (ForAll Eq z) => Eq (FuncDefX z)
+deriving instance (ForAll Show z) => Show (FuncDefX z)
 
-----------------------------------------------------
-----------------------------------------------------
-
-data FparDef z = FparDef (VarIdentifier z) (ParPassType z) 
-
-deriving instance (ForAll Eq z) => Eq (FparDef z)
-deriving instance (ForAll Show z) => Show (FparDef z)
+type FuncDef z = XRec z (FuncDefX z)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data DataType = Integ | Byte 
+data HeaderX z = Header (FuncIdentifier z) (Maybe (DataType z)) [FparDef z]
+
+deriving instance (ForAll Eq z) => Eq (HeaderX z)
+deriving instance (ForAll Show z) => Show (HeaderX z)
+
+type Header z = XRec z (HeaderX z)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data FparDefX z = FparDef (VarIdentifier z) (ParPassType z) 
+
+deriving instance (ForAll Eq z) => Eq (FparDefX z)
+deriving instance (ForAll Show z) => Show (FparDefX z)
+
+type FparDef z = XRec z (FparDefX z)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data DataTypeX = Integ | Byte 
     deriving (Ord, Show, Eq)
 
-----------------------------------------------------
-----------------------------------------------------
-
-data ObjectType = DType DataType | AType (ObjectType) Integer
-    deriving (Ord, Show, Eq)
+type DataType z = XRec z (DataTypeX)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data TypeX = OType ObjectType | PType ObjectType
-    deriving (Ord, Show, Eq)
+data ObjectTypeX z = DType (DataType z) | AType (ObjectType z) (IntConst z)
 
+deriving instance (ForAll Eq z) => Eq (ObjectTypeX z)
+deriving instance (ForAll Show z) => Show (ObjectTypeX z)
 
-type Type z = XRec z (TypeX)
+type ObjectType z = XRec z (ObjectTypeX z)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data ParPassType z = ByRef (Type z)
-                   | ByDefault (Type z)
+data TypeX z = OType (ObjectType z) | PType (ObjectType z)
 
-deriving instance (ForAll Eq z) => Eq (ParPassType z)
-deriving instance (ForAll Show z) => Show (ParPassType z)
+deriving instance (ForAll Eq z) => Eq (TypeX z)
+deriving instance (ForAll Show z) => Show (TypeX z)
+
+type Type z = XRec z (TypeX z)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data ParPassTypeX z = ByRef (Type z)
+                    | ByDefault (Type z)
+
+deriving instance (ForAll Eq z) => Eq (ParPassTypeX z)
+deriving instance (ForAll Show z) => Show (ParPassTypeX z)
+
+type ParPassType z = XRec z (ParPassTypeX z)
 
 ----------------------------------------------------
 ----------------------------------------------------
@@ -238,7 +263,7 @@ type FuncDecl z = XRec z (FuncDeclX z)
 ----------------------------------------------------
 ----------------------------------------------------
 
-data VarDefX z = VarDef (VarIdentifier z) ObjectType
+data VarDefX z = VarDef (VarIdentifier z) (ObjectType z)
 
 deriving instance (ForAll Eq z) => Eq (VarDefX z)
 deriving instance (ForAll Show z) => Show (VarDefX z)
@@ -266,10 +291,12 @@ type Stmt z = XRec z (StmtX z)
 ----------------------------------------------------
 ----------------------------------------------------
 
-data Block z = Block [Stmt z]
+data BlockX z = Block [Stmt z]
 
-deriving instance (ForAll Eq z) => Eq (Block z)
-deriving instance (ForAll Show z) => Show (Block z)
+deriving instance (ForAll Eq z) => Eq (BlockX z)
+deriving instance (ForAll Show z) => Show (BlockX z)
+
+type Block z = XRec z (BlockX z)
 
 ----------------------------------------------------
 ----------------------------------------------------
@@ -348,4 +375,3 @@ deriving instance (ForAll Eq z) => Eq (CondX z)
 deriving instance (ForAll Show z) => Show (CondX z)
 
 type Cond z = XRec z (CondX z)
-

@@ -97,21 +97,22 @@ intConst = located $
     do i <- lexeme L.decimal
        pure $ IntConstPS i
 
-dataType :: Parser DataType 
-dataType = (symbol "int" *> pure Integ) <|> (symbol "byte" *> pure Byte)
+dataType :: Parser (DataType PS)
+dataType = located $ (symbol "int" *> pure Integ) <|> (symbol "byte" *> pure Byte)
 
-{-
-
-objectType :: Parser ObjectType
+objectType :: Parser (ObjectType PS)
 objectType = do
     d <- dataType
-    is <- many (brackets intConst)
+    is <- many (located $ brackets intConst)
     pure $ go d $ Prelude.reverse is
-        where go d [] = DType d
-              go d ((IntConst n,_) : ns) = AType (go d ns) n
+        where go d [] = Located { value = DType d, srcSpan = srcSpan d }
+              go d@Located{ srcSpan = typeSpan} (Located { value = i, srcSpan = iSpan } : ns) = 
+                    let newType = go d ns
+                        newSpan = srcSpan newType
+                    in Located { value = AType newType i, srcSpan = mergeSpans newSpan iSpan }
     
 stype :: Parser (Type PS)
-stype = annotate $ 
+stype = located $ 
     try (do otype <- objectType
             symbol "["
             symbol "]"
@@ -122,7 +123,7 @@ stype = annotate $
     
 
 fparType :: Parser (ParPassType PS)
-fparType = annotate $ 
+fparType = located $
     (do symbol "ref" 
         t <- stype 
         pure $ ByRef t) <|>
@@ -131,11 +132,12 @@ fparType = annotate $
            
 fparDefs :: Parser [FparDef PS]
 fparDefs = do
-        is <- some (annotate varIdentifier)
+        is <- some varIdentifier
         symbol "as" 
         f <- fparType
-        pure $ [(FparDef i f, span) | (i, span) <- is]
+        pure $ [Located { value = FparDef i f, srcSpan = span } | i@Located { srcSpan = span } <- is]
 
+{-
 header :: Parser (Header PS)
 header = annotate $ 
     do i <- funcIdentifier 
