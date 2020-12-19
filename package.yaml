@@ -26,22 +26,13 @@ library:
   source-dirs: src
   exposed-modules:
   - Danac.Core.Ast
+  - Danac.Core.XRecMap
   - Danac.Parser.Ast
   - Danac.Parser.Core
   dependencies:
   - megaparsec
+  - parser-combinators
   - text
-
-executables:
-  danac-exe:
-    main:                Main.hs
-    source-dirs:         app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - danac
 
 tests:
   danac-test:
@@ -57,3 +48,29 @@ tests:
     - pretty-simple
     defaults: hspec/hspec@master
 
+executables:
+  danac-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - danac
+  hello_world-exe:
+    source-dirs:       acceptance-tests/hello_world
+    main:              Main.hs 
+    dependencies:
+    - text
+    - danac
+    - megaparsec
+    - pretty-simple
+  bubblesort-exe:
+    source-dirs:       acceptance-tests/bubble_sort
+    main:              Main.hs 
+    dependencies:
+    - text
+    - danac
+    - megaparsec
+    - pretty-simple

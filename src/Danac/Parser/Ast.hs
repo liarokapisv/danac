@@ -1,19 +1,14 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-module Danac.Parser.Ast where
+module Danac.Parser.Ast (module Danac.Parser.Ast, module Danac.Util.Located) where
     
+import Danac.Util.Located
 import Danac.Core.Ast
-import Text.Megaparsec.Pos
+import Danac.Core.XRecMap
 import Data.Text
 
 data PS
-
-data SourceSpan = SS SourcePos SourcePos
-    deriving (Eq, Show)
-
-data Located a = Located { value :: a, srcSpan :: SourceSpan }
-    deriving (Eq, Show)
 
 type instance IdP PS = Text
 type instance CharP PS = Char
@@ -65,3 +60,6 @@ pattern ExprFalsePS = ExprFalse ()
 pattern ExprNotPS x = ExprNot () x
 
 type instance XRec PS a = Located a
+
+instance CanUnwrapXRec PS where
+    unwrap = value

@@ -7,6 +7,7 @@
     ConstraintKinds, 
     UndecidableInstances, 
     TypeFamilies, 
+    TypeFamilyDependencies, 
     StandaloneDeriving, 
     PatternSynonyms, 
     FlexibleContexts 
@@ -19,44 +20,44 @@ import GHC.Exts (Constraint)
 ----------------------------------------------------
 ----------------------------------------------------
 
-type ForAll (f :: * -> Constraint) z = 
+type ForAll (f :: * -> Constraint) p = 
     (
-     f (IdP z)
-    ,f (IntP z)
-    ,f (CharP z)
-    ,f (StringP z)
-    ,f (XLabelIdentifier z)
-    ,f (XFuncIdentifier z)
-    ,f (XVarIdentifier z)
-    ,f (XCharConst z)
-    ,f (XStringLiteral z)
-    ,f (XIntConst z)
-    ,f (XFuncCall z)
-    ,f (XLvalue z)
-    ,f (XExpr z)
-    ,f (XRec z (LabelIdentifierX z))
-    ,f (XRec z (FuncIdentifierX z))
-    ,f (XRec z (VarIdentifierX z))
-    ,f (XRec z (CharConstX z))
-    ,f (XRec z (StringLiteralX z))
-    ,f (XRec z (IntConstX z))
-    ,f (XRec z (AstX z))
-    ,f (XRec z (FuncDefX z))
-    ,f (XRec z (HeaderX z))
-    ,f (XRec z (FparDefX z))
-    ,f (XRec z (DataTypeX))
-    ,f (XRec z (ObjectTypeX z))
-    ,f (XRec z (TypeX z))
-    ,f (XRec z (ParPassTypeX z))
-    ,f (XRec z (LocalDefX z))
-    ,f (XRec z (FuncDeclX z))
-    ,f (XRec z (VarDefX z))
-    ,f (XRec z (StmtX z))
-    ,f (XRec z (BlockX z))
-    ,f (XRec z (FuncCallX z))
-    ,f (XRec z (LvalueX z))
-    ,f (XRec z (ExprX z))
-    ,f (XRec z (CondX z))
+     f (IdP p)
+    ,f (IntP p)
+    ,f (CharP p)
+    ,f (StringP p)
+    ,f (XLabelIdentifier p)
+    ,f (XFuncIdentifier p)
+    ,f (XVarIdentifier p)
+    ,f (XCharConst p)
+    ,f (XStringLiteral p)
+    ,f (XIntConst p)
+    ,f (XFuncCall p)
+    ,f (XLvalue p)
+    ,f (XExpr p)
+    ,f (XRec p (LabelIdentifierX p))
+    ,f (XRec p (FuncIdentifierX p))
+    ,f (XRec p (VarIdentifierX p))
+    ,f (XRec p (CharConstX p))
+    ,f (XRec p (StringLiteralX p))
+    ,f (XRec p (IntConstX p))
+    ,f (XRec p (AstX p))
+    ,f (XRec p (FuncDefX p))
+    ,f (XRec p (HeaderX p))
+    ,f (XRec p (FparDefX p))
+    ,f (XRec p (DataTypeX p))
+    ,f (XRec p (ObjectTypeX p))
+    ,f (XRec p (TypeX p))
+    ,f (XRec p (ParPassTypeX p))
+    ,f (XRec p (LocalDefX p))
+    ,f (XRec p (FuncDeclX p))
+    ,f (XRec p (VarDefX p))
+    ,f (XRec p (StmtX p))
+    ,f (XRec p (BlockX p))
+    ,f (XRec p (FuncCallX p))
+    ,f (XRec p (LvalueX p))
+    ,f (XRec p (ExprX p))
+    ,f (XRec p (CondX p))
     )
 
     
@@ -64,265 +65,265 @@ type ForAll (f :: * -> Constraint) z =
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XRec z a
+type family XRec p a = r | r -> a
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family IdP z
+type family IdP p
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XLabelIdentifier z
+type family XLabelIdentifier p
 
-data LabelIdentifierX z = LabelIdentifier (XLabelIdentifier z) (IdP z)
+data LabelIdentifierX p = LabelIdentifier (XLabelIdentifier p) (IdP p)
 
-deriving instance (ForAll Show z) => Show (LabelIdentifierX z)
-deriving instance (ForAll Eq z) => Eq (LabelIdentifierX z)
+deriving instance (ForAll Show p) => Show (LabelIdentifierX p)
+deriving instance (ForAll Eq p) => Eq (LabelIdentifierX p)
 
-type LabelIdentifier z = XRec z (LabelIdentifierX z)
+type LabelIdentifier p = XRec p (LabelIdentifierX p)
 
-
-----------------------------------------------------
-----------------------------------------------------
-
-type family XFuncIdentifier z
-
-data FuncIdentifierX z = FuncIdentifier (XFuncIdentifier z) (IdP z)
-
-deriving instance (ForAll Show z) => Show (FuncIdentifierX z)
-deriving instance (ForAll Eq z) => Eq (FuncIdentifierX z)
-
-type FuncIdentifier z = XRec z (FuncIdentifierX z)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XVarIdentifier z
+type family XFuncIdentifier p
 
-data VarIdentifierX z = VarIdentifier (XVarIdentifier z) (IdP z)
+data FuncIdentifierX p = FuncIdentifier (XFuncIdentifier p) (IdP p)
 
-deriving instance (ForAll Show z) => Show (VarIdentifierX z)
-deriving instance (ForAll Eq z) => Eq (VarIdentifierX z)
+deriving instance (ForAll Show p) => Show (FuncIdentifierX p)
+deriving instance (ForAll Eq p) => Eq (FuncIdentifierX p)
 
-type VarIdentifier z = XRec z (VarIdentifierX z)
+type FuncIdentifier p = XRec p (FuncIdentifierX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+type family XVarIdentifier p
+
+data VarIdentifierX p = VarIdentifier (XVarIdentifier p) (IdP p)
+
+deriving instance (ForAll Show p) => Show (VarIdentifierX p)
+deriving instance (ForAll Eq p) => Eq (VarIdentifierX p)
+
+type VarIdentifier p = XRec p (VarIdentifierX p)
 
 ---------------------------------------------------- 
 ----------------------------------------------------
 
-type family CharP z
+type family CharP p
 
 ---------------------------------------------------- 
 ----------------------------------------------------
 
-type family XCharConst z
+type family XCharConst p
 
-data CharConstX z = CharConst (XCharConst z) (CharP z)
+data CharConstX p = CharConst (XCharConst p) (CharP p)
 
-deriving instance (ForAll Show z) => Show (CharConstX z)
-deriving instance (ForAll Eq z) => Eq (CharConstX z)
+deriving instance (ForAll Show p) => Show (CharConstX p)
+deriving instance (ForAll Eq p) => Eq (CharConstX p)
 
-type CharConst z = XRec z (CharConstX z)
+type CharConst p = XRec p (CharConstX p)
 
 ---------------------------------------------------- 
 ----------------------------------------------------
 
-type family StringP z
+type family StringP p
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XStringLiteral z
+type family XStringLiteral p
 
-data StringLiteralX z = StringLiteral (XStringLiteral z) (StringP z)
+data StringLiteralX p = StringLiteral (XStringLiteral p) (StringP p)
 
-deriving instance (ForAll Show z) => Show (StringLiteralX z)
-deriving instance (ForAll Eq z) => Eq (StringLiteralX z)
+deriving instance (ForAll Show p) => Show (StringLiteralX p)
+deriving instance (ForAll Eq p) => Eq (StringLiteralX p)
 
-type StringLiteral z = XRec z (StringLiteralX z)
-
-----------------------------------------------------
-----------------------------------------------------
-
-type family IntP z
+type StringLiteral p = XRec p (StringLiteralX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XIntConst z
-
-data IntConstX z = IntConst (XIntConst z) (IntP z)
-
-deriving instance (ForAll Show z) => Show (IntConstX z)
-deriving instance (ForAll Eq z) => Eq (IntConstX z)
-
-type IntConst z = XRec z (IntConstX z)
+type family IntP p
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data AstX z = Ast (FuncDef z)
+type family XIntConst p
 
-deriving instance (ForAll Eq z) => Eq (AstX z)
-deriving instance (ForAll Show z) => Show (AstX z)
+data IntConstX p = IntConst (XIntConst p) (IntP p)
 
-type Ast z = XRec z (AstX z)
+deriving instance (ForAll Show p) => Show (IntConstX p)
+deriving instance (ForAll Eq p) => Eq (IntConstX p)
 
-----------------------------------------------------
-----------------------------------------------------
-
-data FuncDefX z = FuncDef (Header z) [LocalDef z] (Block z) 
-
-deriving instance (ForAll Eq z) => Eq (FuncDefX z)
-deriving instance (ForAll Show z) => Show (FuncDefX z)
-
-type FuncDef z = XRec z (FuncDefX z)
+type IntConst p = XRec p (IntConstX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data HeaderX z = Header (FuncIdentifier z) (Maybe (DataType z)) [FparDef z]
+data AstX p = Ast (FuncDef p)
 
-deriving instance (ForAll Eq z) => Eq (HeaderX z)
-deriving instance (ForAll Show z) => Show (HeaderX z)
+deriving instance (ForAll Eq p) => Eq (AstX p)
+deriving instance (ForAll Show p) => Show (AstX p)
 
-type Header z = XRec z (HeaderX z)
-
-----------------------------------------------------
-----------------------------------------------------
-
-data FparDefX z = FparDef (VarIdentifier z) (ParPassType z) 
-
-deriving instance (ForAll Eq z) => Eq (FparDefX z)
-deriving instance (ForAll Show z) => Show (FparDefX z)
-
-type FparDef z = XRec z (FparDefX z)
+type Ast p = XRec p (AstX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data DataTypeX = Integ | Byte 
+data FuncDefX p = FuncDef (Header p) [LocalDef p] (Block p) 
+
+deriving instance (ForAll Eq p) => Eq (FuncDefX p)
+deriving instance (ForAll Show p) => Show (FuncDefX p)
+
+type FuncDef p = XRec p (FuncDefX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data HeaderX p = Header (FuncIdentifier p) (Maybe (DataType p)) [FparDef p]
+
+deriving instance (ForAll Eq p) => Eq (HeaderX p)
+deriving instance (ForAll Show p) => Show (HeaderX p)
+
+type Header p = XRec p (HeaderX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data FparDefX p = FparDef (VarIdentifier p) (ParPassType p) 
+
+deriving instance (ForAll Eq p) => Eq (FparDefX p)
+deriving instance (ForAll Show p) => Show (FparDefX p)
+
+type FparDef p = XRec p (FparDefX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data DataTypeX p = Integ | Byte 
     deriving (Ord, Show, Eq)
 
-type DataType z = XRec z (DataTypeX)
+type DataType p = XRec p (DataTypeX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data ObjectTypeX z = DType (DataType z) | AType (ObjectType z) (IntConst z)
+data ObjectTypeX p = DType (DataType p) | AType (ObjectType p) (IntConst p)
 
-deriving instance (ForAll Eq z) => Eq (ObjectTypeX z)
-deriving instance (ForAll Show z) => Show (ObjectTypeX z)
+deriving instance (ForAll Eq p) => Eq (ObjectTypeX p)
+deriving instance (ForAll Show p) => Show (ObjectTypeX p)
 
-type ObjectType z = XRec z (ObjectTypeX z)
-
-----------------------------------------------------
-----------------------------------------------------
-
-data TypeX z = OType (ObjectType z) | PType (ObjectType z)
-
-deriving instance (ForAll Eq z) => Eq (TypeX z)
-deriving instance (ForAll Show z) => Show (TypeX z)
-
-type Type z = XRec z (TypeX z)
+type ObjectType p = XRec p (ObjectTypeX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data ParPassTypeX z = ByRef (Type z)
-                    | ByDefault (Type z)
+data TypeX p = OType (ObjectType p) | PType (ObjectType p)
 
-deriving instance (ForAll Eq z) => Eq (ParPassTypeX z)
-deriving instance (ForAll Show z) => Show (ParPassTypeX z)
+deriving instance (ForAll Eq p) => Eq (TypeX p)
+deriving instance (ForAll Show p) => Show (TypeX p)
 
-type ParPassType z = XRec z (ParPassTypeX z)
-
-----------------------------------------------------
-----------------------------------------------------
-
-data LocalDefX z = LocalDefFuncDef (FuncDef z)
-                 | LocalDefFuncDecl (FuncDecl z)
-                 | LocalDefVarDef (VarDef z)
-
-deriving instance (ForAll Eq z) => Eq (LocalDefX z)
-deriving instance (ForAll Show z) => Show (LocalDefX z)
-
-type LocalDef z = XRec z (LocalDefX z)
+type Type p = XRec p (TypeX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data FuncDeclX z = FuncDecl (Header z)
+data ParPassTypeX p = ByRef (Type p)
+                    | ByDefault (Type p)
 
-deriving instance (ForAll Eq z) => Eq (FuncDeclX z)
-deriving instance (ForAll Show z) => Show (FuncDeclX z)
+deriving instance (ForAll Eq p) => Eq (ParPassTypeX p)
+deriving instance (ForAll Show p) => Show (ParPassTypeX p)
 
-type FuncDecl z = XRec z (FuncDeclX z)
-
-----------------------------------------------------
-----------------------------------------------------
-
-data VarDefX z = VarDef (VarIdentifier z) (ObjectType z)
-
-deriving instance (ForAll Eq z) => Eq (VarDefX z)
-deriving instance (ForAll Show z) => Show (VarDefX z)
-
-type VarDef z = XRec z (VarDefX z)
+type ParPassType p = XRec p (ParPassTypeX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-data StmtX z = StmtSkip
-            | StmtAssign (Lvalue z) (Expr z)
-            | StmtProcCall (FuncCall z)
+data LocalDefX p = LocalDefFuncDef (FuncDef p)
+                 | LocalDefFuncDecl (FuncDecl p)
+                 | LocalDefVarDef (VarDef p)
+
+deriving instance (ForAll Eq p) => Eq (LocalDefX p)
+deriving instance (ForAll Show p) => Show (LocalDefX p)
+
+type LocalDef p = XRec p (LocalDefX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data FuncDeclX p = FuncDecl (Header p)
+
+deriving instance (ForAll Eq p) => Eq (FuncDeclX p)
+deriving instance (ForAll Show p) => Show (FuncDeclX p)
+
+type FuncDecl p = XRec p (FuncDeclX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data VarDefX p = VarDef (VarIdentifier p) (ObjectType p)
+
+deriving instance (ForAll Eq p) => Eq (VarDefX p)
+deriving instance (ForAll Show p) => Show (VarDefX p)
+
+type VarDef p = XRec p (VarDefX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+data StmtX p = StmtSkip
+            | StmtAssign (Lvalue p) (Expr p)
+            | StmtProcCall (FuncCall p)
             | StmtExit
-            | StmtReturn (Expr z)
-            | StmtIf (Cond z, Block z) [(Cond z, Block z)] (Maybe (Block z))
-            | StmtLoop (Maybe (LabelIdentifier z)) (Block z)
-            | StmtBreak (Maybe (LabelIdentifier z))
-            | StmtContinue (Maybe (LabelIdentifier z))
+            | StmtReturn (Expr p)
+            | StmtIf (Cond p, Block p) [(Cond p, Block p)] (Maybe (Block p))
+            | StmtLoop (Maybe (LabelIdentifier p)) (Block p)
+            | StmtBreak (Maybe (LabelIdentifier p))
+            | StmtContinue (Maybe (LabelIdentifier p))
 
-deriving instance (ForAll Eq z) => Eq (StmtX z)
-deriving instance (ForAll Show z) => Show (StmtX z)
+deriving instance (ForAll Eq p) => Eq (StmtX p)
+deriving instance (ForAll Show p) => Show (StmtX p)
 
-type Stmt z = XRec z (StmtX z)
-
-----------------------------------------------------
-----------------------------------------------------
-
-data BlockX z = Block [Stmt z]
-
-deriving instance (ForAll Eq z) => Eq (BlockX z)
-deriving instance (ForAll Show z) => Show (BlockX z)
-
-type Block z = XRec z (BlockX z)
+type Stmt p = XRec p (StmtX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XFuncCall z
+data BlockX p = Block [Stmt p]
 
-data FuncCallX z = FuncCall (XFuncCall z) (FuncIdentifier z) [Expr z]
+deriving instance (ForAll Eq p) => Eq (BlockX p)
+deriving instance (ForAll Show p) => Show (BlockX p)
 
-deriving instance (ForAll Eq z) => Eq (FuncCallX z)
-deriving instance (ForAll Show z) => Show (FuncCallX z)
-
-type FuncCall z = XRec z (FuncCallX z)
+type Block p = XRec p (BlockX p)
 
 ----------------------------------------------------
 ----------------------------------------------------
 
-type family XLvalue z
+type family XFuncCall p
 
-data LvalueX z = LvalueId (XLvalue z) (VarIdentifier z)
-               | LvalueStr (XLvalue z) (StringLiteral z)
-               | LvalueAx (XLvalue z) (Lvalue z) (Expr z)
+data FuncCallX p = FuncCall (XFuncCall p) (FuncIdentifier p) [Expr p]
 
-deriving instance (ForAll Eq z) => Eq (LvalueX z)
-deriving instance (ForAll Show z) => Show (LvalueX z)
+deriving instance (ForAll Eq p) => Eq (FuncCallX p)
+deriving instance (ForAll Show p) => Show (FuncCallX p)
 
-type Lvalue z = XRec z (LvalueX z)
+type FuncCall p = XRec p (FuncCallX p)
+
+----------------------------------------------------
+----------------------------------------------------
+
+type family XLvalue p
+
+data LvalueX p = LvalueId (XLvalue p) (VarIdentifier p)
+               | LvalueStr (XLvalue p) (StringLiteral p)
+               | LvalueAx (XLvalue p) (Lvalue p) (Expr p)
+
+deriving instance (ForAll Eq p) => Eq (LvalueX p)
+deriving instance (ForAll Show p) => Show (LvalueX p)
+
+type Lvalue p = XRec p (LvalueX p)
 
 -----------------------------------------------------
 -----------------------------------------------------
@@ -332,46 +333,46 @@ data Sign = Plus | Minus deriving (Show, Eq)
 -----------------------------------------------------
 -----------------------------------------------------
  
-type family XExpr z
+type family XExpr p
 
-data ExprX z = ExprIntConst (XExpr z) (IntConst z)
-             | ExprCharConst (XExpr z) (CharConst z)
-             | ExprLvalue (XExpr z) (Lvalue z)
-             | ExprParen (XExpr z) (Expr z)
-             | ExprFuncCall (XExpr z) (FuncCall z)
-             | ExprSigned (XExpr z) Sign (Expr z)
-             | ExprAdd (XExpr z) (Expr z) (Expr z)
-             | ExprSub (XExpr z) (Expr z) (Expr z)
-             | ExprMul (XExpr z) (Expr z) (Expr z)
-             | ExprDiv (XExpr z) (Expr z) (Expr z)
-             | ExprMod (XExpr z) (Expr z) (Expr z)
-             | ExprOr  (XExpr z) (Expr z) (Expr z)
-             | ExprAnd (XExpr z) (Expr z) (Expr z)
-             | ExprTrue (XExpr z)
-             | ExprFalse (XExpr z)
-             | ExprNot (XExpr z) (Expr z)
+data ExprX p = ExprIntConst (XExpr p) (IntConst p)
+             | ExprCharConst (XExpr p) (CharConst p)
+             | ExprLvalue (XExpr p) (Lvalue p)
+             | ExprParen (XExpr p) (Expr p)
+             | ExprFuncCall (XExpr p) (FuncCall p)
+             | ExprSigned (XExpr p) Sign (Expr p)
+             | ExprAdd (XExpr p) (Expr p) (Expr p)
+             | ExprSub (XExpr p) (Expr p) (Expr p)
+             | ExprMul (XExpr p) (Expr p) (Expr p)
+             | ExprDiv (XExpr p) (Expr p) (Expr p)
+             | ExprMod (XExpr p) (Expr p) (Expr p)
+             | ExprOr  (XExpr p) (Expr p) (Expr p)
+             | ExprAnd (XExpr p) (Expr p) (Expr p)
+             | ExprTrue (XExpr p)
+             | ExprFalse (XExpr p)
+             | ExprNot (XExpr p) (Expr p)
 
-deriving instance (ForAll Eq z) => Eq (ExprX z)
-deriving instance (ForAll Show z) => Show (ExprX z)
+deriving instance (ForAll Eq p) => Eq (ExprX p)
+deriving instance (ForAll Show p) => Show (ExprX p)
 
-type Expr z = XRec z (ExprX z)
+type Expr p = XRec p (ExprX p)
 
 -----------------------------------------------------
 -----------------------------------------------------
 
-data CondX z = CondExpr (Expr z)
-             | CondParen (Cond z) 
-             | CondNot (Cond z)
-             | CondOr (Cond z) (Cond z)
-             | CondAnd (Cond z) (Cond z)
-             | CondEq (Expr z) (Expr z)
-             | CondNeq (Expr z) (Expr z)
-             | CondLt (Expr z) (Expr z)
-             | CondGt (Expr z) (Expr z)
-             | CondLe (Expr z) (Expr z)
-             | CondGe (Expr z) (Expr z)
+data CondX p = CondExpr (Expr p)
+             | CondParen (Cond p) 
+             | CondNot (Cond p)
+             | CondOr (Cond p) (Cond p)
+             | CondAnd (Cond p) (Cond p)
+             | CondEq (Expr p) (Expr p)
+             | CondNe (Expr p) (Expr p)
+             | CondLt (Expr p) (Expr p)
+             | CondGt (Expr p) (Expr p)
+             | CondLe (Expr p) (Expr p)
+             | CondGe (Expr p) (Expr p)
 
-deriving instance (ForAll Eq z) => Eq (CondX z)
-deriving instance (ForAll Show z) => Show (CondX z)
+deriving instance (ForAll Eq p) => Eq (CondX p)
+deriving instance (ForAll Show p) => Show (CondX p)
 
-type Cond z = XRec z (CondX z)
+type Cond p = XRec p (CondX p)
