@@ -29,10 +29,14 @@ library:
   - Danac.Core.XRecMap
   - Danac.Parser.Ast
   - Danac.Parser.Core
+  - Danac.Renamer.Core
   dependencies:
   - megaparsec
   - parser-combinators
   - text
+  - containers
+  - validation-selective
+  - mtl
 
 tests:
   danac-test:
@@ -46,6 +50,8 @@ tests:
     - megaparsec
     - hspec-megaparsec
     - pretty-simple
+    - mtl
+    - containers
     defaults: hspec/hspec@master
 
 executables:
@@ -66,6 +72,8 @@ executables:
     - danac
     - megaparsec
     - pretty-simple
+    - mtl
+    - validation-selective
   bubblesort-exe:
     source-dirs:       acceptance-tests/bubble_sort
     main:              Main.hs 
@@ -74,3 +82,5 @@ executables:
     - danac
     - megaparsec
     - pretty-simple
+    - mtl
+    - validation-selective

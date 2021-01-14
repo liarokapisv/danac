@@ -65,3 +65,5 @@ packages:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
+ghc-options:
+    "$locals": -Wall -Werror -Wno-missing-signatures -Wno-missing-pattern-synonym-signatures -Wno-unused-do-bind

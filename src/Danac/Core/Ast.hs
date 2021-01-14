@@ -316,9 +316,9 @@ type FuncCall p = XRec p (FuncCallX p)
 
 type family XLvalue p
 
-data LvalueX p = LvalueId (XLvalue p) (VarIdentifier p)
-               | LvalueStr (XLvalue p) (StringLiteral p)
-               | LvalueAx (XLvalue p) (Lvalue p) (Expr p)
+data LvalueX p = LvalueId !(XLvalue p) (VarIdentifier p)
+               | LvalueStr !(XLvalue p) (StringLiteral p)
+               | LvalueAx !(XLvalue p) (Lvalue p) (Expr p)
 
 deriving instance (ForAll Eq p) => Eq (LvalueX p)
 deriving instance (ForAll Show p) => Show (LvalueX p)

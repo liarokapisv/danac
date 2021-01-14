@@ -4,7 +4,7 @@
 module Test.Danac.Parser.Identifiers (identifierSpec) where
 
 import Danac.Parser.Ast
-import Danac.Parser.Core (Parser, labelIdentifier, varIdentifier, funcIdentifier)
+import Danac.Parser.Core (Parser)
 
 import Data.Text
 import Text.Megaparsec

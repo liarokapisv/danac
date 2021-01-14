@@ -5,7 +5,6 @@ module Danac.Core.AstSpec where
 
 import Danac.Core.Ast
 import Test.Hspec
-import Text.Pretty.Simple
 import Data.Functor.Identity
 
 data ExampleTag

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 60eb8bf4db6d204a68dccd1e55d3096204e069e1b9f8e43040d139a01ab50094
+-- hash: 3728f662a7ca90de0f52a18ce0e706bfc45d6e51b136af6365a1f9c81db73230
 
 name:           danac
 version:        0.1.0.0
@@ -31,6 +31,7 @@ library
       Danac.Core.XRecMap
       Danac.Parser.Ast
       Danac.Parser.Core
+      Danac.Renamer.Core
   other-modules:
       Danac.Util.Located
       Paths_danac
@@ -38,9 +39,12 @@ library
       src
   build-depends:
       base
+    , containers
     , megaparsec
+    , mtl
     , parser-combinators
     , text
+    , validation-selective
   default-language: Haskell2010
 
 executable bubblesort-exe
@@ -53,8 +57,10 @@ executable bubblesort-exe
       base
     , danac
     , megaparsec
+    , mtl
     , pretty-simple
     , text
+    , validation-selective
   default-language: Haskell2010
 
 executable danac-exe
@@ -79,8 +85,10 @@ executable hello_world-exe
       base
     , danac
     , megaparsec
+    , mtl
     , pretty-simple
     , text
+    , validation-selective
   default-language: Haskell2010
 
 test-suite danac-test
@@ -91,6 +99,7 @@ test-suite danac-test
       Danac.Parser.Core.FuncIdentifierSpec
       Danac.Parser.Core.LabelIdentifierSpec
       Danac.Parser.Core.VarIdentifierSpec
+      Danac.Renamer.Core.HeaderSpec
       Test.Danac.Parser.Identifiers
       Paths_danac
   hs-source-dirs:
@@ -98,10 +107,12 @@ test-suite danac-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
+    , containers
     , danac
     , hspec ==2.*
     , hspec-megaparsec
     , megaparsec
+    , mtl
     , pretty-simple
     , text
   default-language: Haskell2010

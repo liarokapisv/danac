@@ -63,3 +63,6 @@ type instance XRec PS a = Located a
 
 instance CanUnwrapXRec PS where
     unwrap = value
+
+instance CanMapXRec PS where
+    xmap f x = fmap x f

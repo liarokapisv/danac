@@ -13,7 +13,7 @@ import Data.Void
 import Data.Char
 import Danac.Core.Ast
 import Danac.Parser.Ast
-import Control.Monad (when, join)
+import Control.Monad (join)
 
 type Parser = Parsec Void Text
 
@@ -71,7 +71,7 @@ located p = do
   return $ Located { value = x, srcSpan = SS p1 p2 }
 
 mergeSpans :: SourceSpan -> SourceSpan -> SourceSpan
-mergeSpans (SS p11 p12) (SS p21 p22) = SS p11 p22
+mergeSpans (SS p11 _) (SS _ p22) = SS p11 p22
 
 labelIdentifier :: Parser (LabelIdentifier PS)
 labelIdentifier = located $ LabelIdentifierPS <$> identifier
@@ -106,7 +106,7 @@ objectType = do
     is <- many (located $ brackets intConst)
     pure $ go d $ Prelude.reverse is
         where go d [] = Located { value = DType d, srcSpan = srcSpan d }
-              go d@Located{ srcSpan = typeSpan} (Located { value = i, srcSpan = iSpan } : ns) = 
+              go d (Located { value = i, srcSpan = iSpan } : ns) = 
                     let newType = go d ns
                         newSpan = srcSpan newType
                     in Located { value = AType newType i, srcSpan = mergeSpans newSpan iSpan }
@@ -135,7 +135,7 @@ fparDefs = do
         is <- some varIdentifier
         symbol "as" 
         f <- fparType
-        pure $ [Located { value = FparDef i f, srcSpan = span } | i@Located { srcSpan = span } <- is]
+        pure $ [Located { value = FparDef i f, srcSpan = sp } | i@Located { srcSpan = sp } <- is]
 
 header :: Parser (Header PS)
 header = located $ 
@@ -160,7 +160,7 @@ varDefs = do
        ids <- some (varIdentifier)
        symbol "is"
        t <- objectType
-       pure $ [Located { value = VarDef id t, srcSpan = s } | id @ Located { srcSpan = s} <- ids]
+       pure $ [Located { value = VarDef i t, srcSpan = s } | i @ Located { srcSpan = s} <- ids]
 
 lvalueHead :: Parser (Lvalue PS)
 lvalueHead = located $ 
@@ -238,9 +238,9 @@ expr = makeExprParser exprTerm eoperators
 
 funcCall :: Parser (FuncCall PS)
 funcCall = located $ 
-    do id <- funcIdentifier
+    do i <- funcIdentifier
        es <- parens (sepBy expr (symbol ","))
-       pure $ FuncCallPS id es
+       pure $ FuncCallPS i es
 
 cnotOp :: Operator Parser (Cond PS)
 cnotOp = Prefix $ 
