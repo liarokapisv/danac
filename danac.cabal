@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3728f662a7ca90de0f52a18ce0e706bfc45d6e51b136af6365a1f9c81db73230
+-- hash: cd7302112aec895d0008e270b068bf68316ef9921d4fddf6fdd0b5863c69b434
 
 name:           danac
 version:        0.1.0.0
@@ -33,6 +33,7 @@ library
       Danac.Parser.Core
       Danac.Renamer.Core
   other-modules:
+      Danac.TypeChecker.Core
       Danac.Util.Located
       Paths_danac
   hs-source-dirs:

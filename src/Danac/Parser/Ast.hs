@@ -59,7 +59,7 @@ pattern ExprTruePS = ExprTrue ()
 pattern ExprFalsePS = ExprFalse ()
 pattern ExprNotPS x = ExprNot () x
 
-type instance XRec PS a = Located a
+type instance XRec PS = Located
 
 instance CanUnwrapXRec PS where
     unwrap = value

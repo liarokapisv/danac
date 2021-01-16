@@ -20,7 +20,7 @@ instance X.CanWrap NoShow where
    wrap = NoShow 
 
 instance Show a => Show (NoShow a) where
-    show (NoShow x) = show x
+    show (NoShow x) = "(" <> show x <> ")"
 
 main :: IO ()
 main = do

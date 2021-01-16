@@ -27,7 +27,7 @@ type instance XIntConst (XRecMap f x) = XIntConst x
 type instance XFuncCall (XRecMap f x) = XFuncCall x
 type instance XLvalue (XRecMap f x) = XLvalue x
 type instance XExpr (XRecMap f x) = XExpr x
-type instance XRec (XRecMap f x) a = f a
+type instance XRec (XRecMap f x) = f
 
 type Strip x = XRecMap Identity x
 
