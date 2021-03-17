@@ -4,46 +4,31 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cd7302112aec895d0008e270b068bf68316ef9921d4fddf6fdd0b5863c69b434
+-- hash: 9bfa3542583ea21b463606eb09a000542783c58fa9733f13b6fe1cd6ccf2be33
 
 name:           danac
-version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/danac#readme>
-homepage:       https://github.com/githubuser/danac#readme
-bug-reports:    https://github.com/githubuser/danac/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2020 Author name here
-license:        BSD3
-license-file:   LICENSE
+version:        0.0.0
 build-type:     Simple
-extra-source-files:
-    README.md
-    ChangeLog.md
-
-source-repository head
-  type: git
-  location: https://github.com/githubuser/danac
 
 library
   exposed-modules:
-      Danac.Core.Ast
-      Danac.Core.XRecMap
-      Danac.Parser.Ast
-      Danac.Parser.Core
-      Danac.Renamer.Core
+      Danac.Ast
+      Danac.Util.Annotation
+      Danac.Util.SourceSpan
+      Danac.Util.Derive
+      Danac.Parser
   other-modules:
-      Danac.TypeChecker.Core
-      Danac.Util.Located
       Paths_danac
   hs-source-dirs:
       src
   build-depends:
       base
+    , compdata
     , containers
     , megaparsec
     , mtl
     , parser-combinators
+    , template-haskell
     , text
     , validation-selective
   default-language: Haskell2010
@@ -73,7 +58,10 @@ executable danac-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
+    , compdata
     , danac
+    , mtl
+    , validation-selective
   default-language: Haskell2010
 
 executable hello_world-exe
@@ -91,30 +79,3 @@ executable hello_world-exe
     , text
     , validation-selective
   default-language: Haskell2010
-
-test-suite danac-test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-      Danac.Core.AstSpec
-      Danac.Parser.Core.FuncIdentifierSpec
-      Danac.Parser.Core.LabelIdentifierSpec
-      Danac.Parser.Core.VarIdentifierSpec
-      Danac.Renamer.Core.HeaderSpec
-      Test.Danac.Parser.Identifiers
-      Paths_danac
-  hs-source-dirs:
-      test
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      base
-    , containers
-    , danac
-    , hspec ==2.*
-    , hspec-megaparsec
-    , megaparsec
-    , mtl
-    , pretty-simple
-    , text
-  default-language: Haskell2010
-  build-tool-depends: hspec-discover:hspec-discover == 2.*

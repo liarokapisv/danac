@@ -3,7 +3,21 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: compdata-0.12.1@sha256:bcacccfb0e44c6950c3e1d73edfcc0d3b836109b367c40a02d674f3173b3d8a9,13243
+    pantry-tree:
+      size: 7645
+      sha256: 2dab799d3cb6d12c087cd3c61113ec2ab3c5311cf91dc9b8af67dac19c87b285
+  original:
+    hackage: compdata-0.12.1
+- completed:
+    hackage: tree-view-0.5.1@sha256:a32b16fdbe24ad21cb6679c2a925bcc7715ae5c5db0ae6b633e35e28e2fefd98,1184
+    pantry-tree:
+      size: 215
+      sha256: 352f008d14d338bc1addd47a627315d907afcc1267a02e2fa92e00fb8a5190be
+  original:
+    hackage: tree-view-0.5.1
 snapshots:
 - completed:
     size: 532832

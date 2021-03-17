@@ -1,23 +1,4 @@
 name:                danac
-version:             0.1.0.0
-github:              "githubuser/danac"
-license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "2020 Author name here"
-
-extra-source-files:
-- README.md
-- ChangeLog.md
-
-# Metadata used when publishing your package
-# synopsis:            Short description of your package
-# category:            Web
-
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/danac#readme>
 
 dependencies:
 - base
@@ -25,11 +6,14 @@ dependencies:
 library:
   source-dirs: src
   exposed-modules:
-  - Danac.Core.Ast
-  - Danac.Core.XRecMap
-  - Danac.Parser.Ast
-  - Danac.Parser.Core
-  - Danac.Renamer.Core
+  - Danac.Ast
+  - Danac.Util.Annotation
+  - Danac.Util.SourceSpan
+  - Danac.Util.Derive
+  - Danac.Parser
+    #- Danac.Ast
+    #- Danac.Parser.Core
+    #- Danac.Renamer.Core
   dependencies:
   - megaparsec
   - parser-combinators
@@ -37,22 +21,8 @@ library:
   - containers
   - validation-selective
   - mtl
-
-tests:
-  danac-test:
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    dependencies:
-    - text
-    - danac
-    - megaparsec
-    - hspec-megaparsec
-    - pretty-simple
-    - mtl
-    - containers
-    defaults: hspec/hspec@master
+  - compdata
+  - template-haskell
 
 executables:
   danac-exe:
@@ -64,6 +34,9 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - danac
+    - mtl
+    - compdata
+    - validation-selective
   hello_world-exe:
     source-dirs:       acceptance-tests/hello_world
     main:              Main.hs 
