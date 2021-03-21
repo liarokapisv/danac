@@ -162,9 +162,12 @@ varDefs = do
        t <- objectType
        pure $ [VarDef i t :&.: s | (i, s) <- ids]
 
+variable :: Parser (LocatedT Variable)
+variable = locatedt $ Variable <$> identifier
+
 lvalueHead :: Parser (LocatedT Lvalue)
 lvalueHead = locatedt $ 
-    (LvalueId <$> identifier) <|> 
+    (LvalueId <$> variable) <|> 
     (LvalueStr <$> stringLiteral)
 
 lvalue :: Parser (LocatedT Lvalue)

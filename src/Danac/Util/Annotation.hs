@@ -3,6 +3,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Danac.Util.Annotation where
 
@@ -14,8 +15,9 @@ import Data.Comp.Multi.Show
 import Data.Comp.Multi.Term
 import Control.Monad (liftM)
 
-data (f :&: a) (g ::  * -> *) e = f g e :&: a
+data (f :&: a) (g ::  * -> *) e = !(f g e) :&: !a
 pattern x :&.: y = Term (x :&: y)
+{-# COMPLETE (:&.:) #-}
 
 getAnn :: (f :&: a) g e -> a
 getAnn (_ :&: x) = x
@@ -45,10 +47,13 @@ instance (HTraversable f) => HTraversable (f :&: a) where
     hmapM f (v :&: c) = liftM (:&: c) (hmapM f v)
 
 instance (ShowHF f, Show a) => ShowHF (f :&: a) where
-    showHF (v :&: p) =  K $ "(" ++ unK (showHF v) ++ " :&: " ++ show p ++ ")"
+    showHF (v :&: p) =  case show p of
+                                "" -> showHF v
+                                x -> K $ "(" ++ unK (showHF v) ++ " :&: " ++ x ++ ")"
 
-data (f :&&: a) (g ::  * -> *) e = f g e :&&: a e
+data (f :&&: a) (g ::  * -> *) e = !(f g e) :&&: !(a e)
 pattern x :&&.: y = Term (x :&&: y)
+{-# COMPLETE (:&&.:) #-}
 
 getAnnI :: (f :&&: a) g e -> a e
 getAnnI (_ :&&: x) = x
@@ -78,7 +83,9 @@ instance (HTraversable f) => HTraversable (f :&&: a) where
     hmapM f (v :&&: c) = liftM (:&&: c) (hmapM f v)
 
 instance (ShowHF f, forall e. Show (a e)) => ShowHF (f :&&: a) where
-    showHF (v :&&: p) =  K $ "(" ++ unK (showHF v) ++ " :&&: " ++ show p ++ ")"
+    showHF (v :&&: p) = case show p of
+                                "" -> showHF v
+                                x ->  K $ "(" ++ unK (showHF v) ++ " :&&: " ++ x ++ ")"
 
 strip :: HFunctor f => Term (f :&: a) e -> Term f e
 strip = cata go

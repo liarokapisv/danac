@@ -11,6 +11,7 @@ library:
   - Danac.Util.SourceSpan
   - Danac.Util.Derive
   - Danac.Parser
+  - Danac.Renamer
     #- Danac.Ast
     #- Danac.Parser.Core
     #- Danac.Renamer.Core
@@ -33,27 +34,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - text
     - danac
+    - megaparsec
+    - pretty-simple
     - mtl
+    - validation-selective
     - compdata
-    - validation-selective
-  hello_world-exe:
-    source-dirs:       acceptance-tests/hello_world
-    main:              Main.hs 
-    dependencies:
-    - text
-    - danac
-    - megaparsec
-    - pretty-simple
-    - mtl
-    - validation-selective
-  bubblesort-exe:
-    source-dirs:       acceptance-tests/bubble_sort
-    main:              Main.hs 
-    dependencies:
-    - text
-    - danac
-    - megaparsec
-    - pretty-simple
-    - mtl
-    - validation-selective

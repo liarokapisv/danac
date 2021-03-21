@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9bfa3542583ea21b463606eb09a000542783c58fa9733f13b6fe1cd6ccf2be33
+-- hash: 87ac788aeda73061249a37468862caa4d6ef1a01571a8e751c4b5bfda42ae482
 
 name:           danac
 version:        0.0.0
@@ -17,6 +17,7 @@ library
       Danac.Util.SourceSpan
       Danac.Util.Derive
       Danac.Parser
+      Danac.Renamer
   other-modules:
       Paths_danac
   hs-source-dirs:
@@ -33,22 +34,6 @@ library
     , validation-selective
   default-language: Haskell2010
 
-executable bubblesort-exe
-  main-is: Main.hs
-  other-modules:
-      Paths_danac
-  hs-source-dirs:
-      acceptance-tests/bubble_sort
-  build-depends:
-      base
-    , danac
-    , megaparsec
-    , mtl
-    , pretty-simple
-    , text
-    , validation-selective
-  default-language: Haskell2010
-
 executable danac-exe
   main-is: Main.hs
   other-modules:
@@ -59,19 +44,6 @@ executable danac-exe
   build-depends:
       base
     , compdata
-    , danac
-    , mtl
-    , validation-selective
-  default-language: Haskell2010
-
-executable hello_world-exe
-  main-is: Main.hs
-  other-modules:
-      Paths_danac
-  hs-source-dirs:
-      acceptance-tests/hello_world
-  build-depends:
-      base
     , danac
     , megaparsec
     , mtl
