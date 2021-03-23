@@ -29,8 +29,10 @@ import Data.List (elemIndex, intersperse)
 
 data Error = UndefinedVariable Text SourceSpan
            | UndefinedFunction Text SourceSpan
+           | UndefinedLabel Text SourceSpan
            | AlreadyDefinedVariable Text SourceSpan
            | AlreadyDefinedFunction Text SourceSpan
+           | AlreadyDefinedLabel Text SourceSpan
     deriving Show
 
 data Frame = Frame {
@@ -41,19 +43,20 @@ data Frame = Frame {
 
 data Context = Context {
     frames :: [Frame],
-    globals :: [Text]
+    globals :: [Text],
+    labels :: [Text]
 }
 
-emptyContext = Context { frames = [], globals = ["writeString", "strlen"] }
+emptyContext = Context { frames = [], globals = ["readInteger", "writeString", "strlen"], labels=[] }
 
-withNamespace t fs = mconcat $ intersperse "." $ reverse $ (t : fmap functionName fs)
+withNamespace t names = mconcat $ intersperse "." $ reverse $ (t : names)
 
 lookVariable :: Text -> Context -> Maybe (Text, Int, Int)
 lookVariable t c = go 0 (frames c)
     where go _ [] = Nothing
           go n (Frame {functionName = name, variables = vs} : fs) = 
                 case elemIndex t (reverse vs) of
-                        Just i -> Just (withNamespace name fs, n, i)
+                        Just i -> Just (withNamespace name (fmap functionName fs), n, i)
                         Nothing -> go (n+1) fs
 
 lookFunction :: Text -> Context -> Maybe Text
@@ -62,8 +65,13 @@ lookFunction t c = case go (frames c) of
                         Nothing | t `elem` globals c -> Just t
                                 | otherwise -> Nothing
     where go [] = Nothing
-          go fs@(f : fs') | t `elem` functions f = Just $ withNamespace t fs
+          go fs@(f : fs') | t `elem` functions f = Just $ withNamespace t (fmap functionName fs)
                           | otherwise = go fs'
+
+lookLabel :: Text -> Context -> Maybe Text
+lookLabel t c = case dropWhile (/= t) (labels c) of
+                     [] -> Nothing
+                     (x:xs) -> Just $ withNamespace x xs
                 
 collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, [Text])
 collectHeaderVarNames (Header name _ fdefs :&.: _) = fmap (\s -> (name, reverse s )) $ go [] fdefs
@@ -153,6 +161,10 @@ newtype Renamer f i = Renamer { getRenamer :: Compose (Reader Context) (Validati
 renameHeader :: Text -> Term (T :&&: Ann) FuncDef -> Term (T :&&: Ann) FuncDef
 renameHeader t (FuncDef (Header _ x y :&&.: z) k l :&&.: m) = FuncDef (Header t x y :&&.: z) k l :&&.: m
 
+renameLoopLabel :: Text -> Term (T :&&: Ann) Stmt -> Term (T :&&: Ann) Stmt
+renameLoopLabel t (StmtLoop (Just _) xs :&&.: y) = StmtLoop (Just t) xs :&&.: y
+renameLoopLabel _ x = x
+
 renameAlg :: RAlg (T :&: SourceSpan) (Renamer (Term (T :&&: Ann))) 
 renameAlg (t :&: s) = 
     case view t of
@@ -166,9 +178,9 @@ renameAlg (t :&: s) =
             case mframe of
                 Left e -> pure $ Failure [e]
                 Right (name, frame) -> do
-                    name' <- asks $ withNamespace name . frames
+                    name' <- asks $ withNamespace name . fmap functionName . frames
                     local (\r -> r { frames = frame : frames r}) $
-                        getCompose $ fmap (renameHeader name') $ fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) f
+                        getCompose $ fmap (renameHeader name') $ defaultCase f p
         NoAnnView (FuncCall name exprs) p -> Renamer $ Compose $ do
             mf <- asks $ lookFunction name 
             case mf of
@@ -176,6 +188,26 @@ renameAlg (t :&: s) =
                 Just name' -> do
                     let exprs' = sequenceA $ fmap (getRenamer . fsnd) exprs
                     getCompose $ fmap (:&&.: NoAnn s p) $ FuncCall name' <$> exprs'
-        NoAnnView x p -> Renamer $ fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) x
+        NoAnnView l@(StmtLoop (Just name) _) p -> Renamer $ Compose $ do
+            found <- asks $ elem name . labels
+            if not found 
+                then do
+                    name' <- asks $ withNamespace name . labels
+                    local (\r -> r { labels = name : labels r }) $ do
+                        getCompose $ fmap (renameLoopLabel name') $ defaultCase l p
+                else
+                    pure $ Failure [AlreadyDefinedLabel name s]
+        NoAnnView (StmtBreak (Just name)) p -> Renamer $ Compose $ do
+            mlabel <- asks $ lookLabel name
+            case mlabel of
+                Nothing -> pure $ Failure [UndefinedLabel name s]
+                Just name' -> pure $ Success $ StmtBreak (Just name') :&&.: NoAnn s p
+        NoAnnView (StmtContinue (Just name)) p -> Renamer $ Compose $ do
+            mlabel <- asks $ lookLabel name
+            case mlabel of
+                Nothing -> pure $ Failure [UndefinedLabel name s]
+                Just name' -> pure $ Success $ StmtContinue (Just name') :&&.: NoAnn s p
+        NoAnnView x p -> Renamer $ defaultCase x p
+    where defaultCase x p = fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) x
 
 rename = getRenamer . para renameAlg
