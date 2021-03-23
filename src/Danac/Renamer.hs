@@ -9,6 +9,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
 module Danac.Renamer where
@@ -24,27 +25,74 @@ import Data.Comp.Multi.Algebra
 import Data.Comp.Multi.Term (Term)
 import Data.Comp.Multi.HTraversable (htraverse)
 import Data.Functor.Compose
-import Data.List (elemIndex)
+import Data.List (elemIndex, intersperse)
 
 data Error = UndefinedVariable Text SourceSpan
-           | AlreadyDefined Text SourceSpan
+           | UndefinedFunction Text SourceSpan
+           | AlreadyDefinedVariable Text SourceSpan
+           | AlreadyDefinedFunction Text SourceSpan
     deriving Show
 
 data Frame = Frame {
     functionName :: Text,
-    variables :: [Text]
+    variables :: [Text],
+    functions :: [Text]
 }
 
-type Context = [Frame]
+data Context = Context {
+    frames :: [Frame],
+    globals :: [Text]
+}
 
+emptyContext = Context { frames = [], globals = ["writeString", "strlen"] }
+
+withNamespace t fs = mconcat $ intersperse "." $ reverse $ (t : fmap functionName fs)
 
 lookVariable :: Text -> Context -> Maybe (Text, Int, Int)
-lookVariable t c = go 0 c
+lookVariable t c = go 0 (frames c)
     where go _ [] = Nothing
-          go n (Frame {functionName = fn, variables = vs} : fs) = 
+          go n (Frame {functionName = name, variables = vs} : fs) = 
                 case elemIndex t (reverse vs) of
-                        Just i -> Just (fn, n, i)
+                        Just i -> Just (withNamespace name fs, n, i)
                         Nothing -> go (n+1) fs
+
+lookFunction :: Text -> Context -> Maybe Text
+lookFunction t c = case go (frames c) of
+                        Just n -> Just n
+                        Nothing | t `elem` globals c -> Just t
+                                | otherwise -> Nothing
+    where go [] = Nothing
+          go fs@(f : fs') | t `elem` functions f = Just $ withNamespace t fs
+                          | otherwise = go fs'
+                
+collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, [Text])
+collectHeaderVarNames (Header name _ fdefs :&.: _) = fmap (\s -> (name, reverse s )) $ go [] fdefs
+    where go :: [Text] -> [Term (T :&: SourceSpan) FparDef] -> Either Error [Text]
+          go n [] = Right n
+          go n (FparDef t _ :&.: s : fs) = 
+                    if t `elem` n 
+                        then Left $ AlreadyDefinedVariable t s
+                        else go (t : n) fs
+
+
+collectLocalNames :: ([Text],[Text]) -> [Term (T :&: SourceSpan) LocalDef] -> Either Error ([Text],[Text])
+collectLocalNames (vars,fns) [] = Right (vars, fns)
+collectLocalNames (vars,fns) (LocalDefFuncDef (FuncDef (Header t _ _ :&.: s) _ _ :&.: _) :&.: _ : ds) 
+    | t `elem` vars = Left $ AlreadyDefinedFunction t s
+    | otherwise = collectLocalNames (vars,(t : fns)) ds
+collectLocalNames (vars,fns) (LocalDefFuncDecl (FuncDecl (Header t _ _ :&.: s) :&.: _) :&.: _ : ds) 
+    | t `elem` vars = Left $ AlreadyDefinedFunction t s
+    | otherwise = collectLocalNames (vars,(t : fns)) ds
+collectLocalNames (vars,fns) (LocalDefVarDef (VarDef t _ :&.: s) :&.: _ : ds) 
+    | t `elem` vars = Left $ AlreadyDefinedVariable t s 
+    | otherwise = collectLocalNames ((t : vars),fns) ds
+
+createFrame :: Term (T :&: SourceSpan) Header -> [Term (T :&: SourceSpan) LocalDef] -> Either Error (Text, Frame)
+createFrame header ldefs = do
+    (name, vars1) <- collectHeaderVarNames header
+    (vars2, fns) <- collectLocalNames (vars1,[]) ldefs
+    pure $ (name, Frame { functionName = name, variables = vars2, functions = fns })
+
 
 data NoAnnGroup i where
     NoAnnAst :: NoAnnGroup Ast
@@ -74,31 +122,6 @@ data Ann i where
 
 deriving instance (Show (Ann i))
 
-collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, [Text])
-collectHeaderVarNames (Header name _ fdefs :&.: _) = fmap (\s -> (name, reverse s )) $ go [] fdefs
-    where go :: [Text] -> [Term (T :&: SourceSpan) FparDef] -> Either Error [Text]
-          go n [] = Right n
-          go n (FparDef t _ :&.: s : fs) = 
-                    if t `elem` n 
-                        then Left $ AlreadyDefined t s
-                        else go (t : n) fs
-
-
-collectLocalVarNames :: [Text] -> [Term (T :&: SourceSpan) LocalDef] -> Either Error [Text]
-collectLocalVarNames n [] = Right n
-collectLocalVarNames n (LocalDefFuncDef _ :&.: _ : ds) = collectLocalVarNames n ds
-collectLocalVarNames n (LocalDefFuncDecl _ :&.: _ : ds) = collectLocalVarNames n ds
-collectLocalVarNames n (LocalDefVarDef (VarDef t _ :&.: s) :&.: _ : ds) = 
-                    if t `elem` n 
-                        then Left $ AlreadyDefined t s
-                        else collectLocalVarNames (t : n) ds
-
-createFrame :: Term (T :&: SourceSpan) Header -> [Term (T :&: SourceSpan) LocalDef] -> Either Error Frame
-createFrame header ldefs = do
-    (name, names1) <- collectHeaderVarNames header
-    names2 <- collectLocalVarNames names1 ldefs
-    pure $ Frame { functionName = name, variables = names1 ++ names2 }
-
 data View r i where
     VariableView :: T r Variable -> View r Variable
     NoAnnView :: T r i -> NoAnnGroup i -> View r i
@@ -127,20 +150,32 @@ view y = case group y of
 
 newtype Renamer f i = Renamer { getRenamer :: Compose (Reader Context) (Validation [Error]) (f i) }
 
+renameHeader :: Text -> Term (T :&&: Ann) FuncDef -> Term (T :&&: Ann) FuncDef
+renameHeader t (FuncDef (Header _ x y :&&.: z) k l :&&.: m) = FuncDef (Header t x y :&&.: z) k l :&&.: m
+
 renameAlg :: RAlg (T :&: SourceSpan) (Renamer (Term (T :&&: Ann))) 
 renameAlg (t :&: s) = 
     case view t of
         VariableView (Variable name) -> Renamer $ Compose $ do
             minfo <- asks $ lookVariable name
             case minfo of
-                Nothing -> pure $ Failure $ [UndefinedVariable name s]
+                Nothing -> pure $ Failure [UndefinedVariable name s]
                 Just info -> pure $ Success $ Variable name :&&.: AnnVariable s info
         NoAnnView f@(FuncDef (header :*: _) ldefs _) p -> Renamer $ Compose $ do
             let mframe = createFrame header (fmap ffst ldefs)
             case mframe of
                 Left e -> pure $ Failure [e]
-                Right frame -> local (frame:) $ 
-                    getCompose $ fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) f
+                Right (name, frame) -> do
+                    name' <- asks $ withNamespace name . frames
+                    local (\r -> r { frames = frame : frames r}) $
+                        getCompose $ fmap (renameHeader name') $ fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) f
+        NoAnnView (FuncCall name exprs) p -> Renamer $ Compose $ do
+            mf <- asks $ lookFunction name 
+            case mf of
+                Nothing -> pure $ Failure [UndefinedFunction name s]
+                Just name' -> do
+                    let exprs' = sequenceA $ fmap (getRenamer . fsnd) exprs
+                    getCompose $ fmap (:&&.: NoAnn s p) $ FuncCall name' <$> exprs'
         NoAnnView x p -> Renamer $ fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) x
 
 rename = getRenamer . para renameAlg

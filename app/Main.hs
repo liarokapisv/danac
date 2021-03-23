@@ -11,7 +11,7 @@ import Danac.Util.Annotation
 import Data.Comp.Multi.Algebra
 import Data.Comp.Multi.Term
 import Danac.Parser (ast)
-import Danac.Renamer (rename, Ann(..))
+import Danac.Renamer (rename, Ann(..), emptyContext)
 import Text.Megaparsec (parse)
 import Text.Pretty.Simple (pPrint)
 import Validation
@@ -36,6 +36,6 @@ main = do
     let tree = parse ast "" text
     case tree of
         Left err -> pPrint err
-        Right pt -> case runReader (getCompose $ rename pt) [] of
+        Right pt -> case runReader (getCompose $ rename pt) emptyContext of
                         Failure errors -> pPrint errors
                         Success t -> pPrint (noSpan t)
