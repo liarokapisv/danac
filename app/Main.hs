@@ -27,6 +27,7 @@ noSpan = cata noSpanAlg
 
 instance Show (NoSpanAnn i) where
     show (NoSpanAnn (AnnVariable _ t)) = show t
+    show (NoSpanAnn (AnnFunction _ t)) = show t
     show (NoSpanAnn (NoAnn _ _)) = ""
 
 main :: IO ()

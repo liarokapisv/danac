@@ -41,6 +41,8 @@ data Type = DType DataType | AType Type Integer
     deriving Show
 data FancyType = Value Type | Ref Type | Pointer Type
     deriving Show
+data FunctionType = FunctionType (Maybe DataType) [FancyType]
+    deriving Show
 
 data T r i where
     Ast :: r FuncDef -> T r Ast
