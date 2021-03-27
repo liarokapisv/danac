@@ -22,10 +22,6 @@ data Ast
 data FuncDef 
 data Header 
 data FparDef 
-data DataType 
-data ObjectType 
-data Type 
-data ParPassType 
 data FuncIdentifier
 data VarIdentifier
 data LocalDef
@@ -39,27 +35,21 @@ data Lvalue
 data Expr
 data Cond
 
+data DataType = Integ | Byte
+    deriving Show
+data Type = DType DataType | AType Type Integer
+    deriving Show
+data FancyType = Value Type | Ref Type | Pointer Type
+    deriving Show
 
 data T r i where
     Ast :: r FuncDef -> T r Ast
 
     FuncDef :: r Header -> [r LocalDef] -> r Block -> T r FuncDef
 
-    Header :: Text -> Maybe (r DataType) -> [r FparDef] -> T r Header
+    Header :: Text -> Maybe DataType -> [r FparDef] -> T r Header
 
-    FparDef :: Text -> r ParPassType -> T r FparDef
-
-    Integ :: T r DataType
-    Byte :: T r DataType
-
-    DType :: r DataType -> T r ObjectType
-    AType :: r ObjectType -> Integer -> T r ObjectType
-
-    OType :: r ObjectType -> T r Type
-    PType :: r ObjectType -> T r Type
-
-    ByRef :: r Type -> T r ParPassType
-    ByDefault :: r Type -> T r ParPassType
+    FparDef :: Text -> FancyType -> T r FparDef
 
     LocalDefFuncDef :: r FuncDef -> T r LocalDef
     LocalDefFuncDecl :: r FuncDecl -> T r LocalDef
@@ -67,7 +57,7 @@ data T r i where
 
     FuncDecl :: r Header -> T r FuncDecl
 
-    VarDef :: Text -> r ObjectType -> T r VarDef
+    VarDef :: Text -> Type -> T r VarDef
 
     CondStmt :: r Cond -> r Block -> T r CondStmt
 
@@ -130,10 +120,6 @@ data Group r i where
     GroupFuncDef :: T r FuncDef -> Group r FuncDef
     GroupHeader :: T r Header -> Group r Header
     GroupFparDef :: T r FparDef -> Group r FparDef
-    GroupDataType :: T r DataType -> Group r DataType
-    GroupObjectType :: T r ObjectType -> Group r ObjectType
-    GroupType :: T r Type -> Group r Type
-    GroupParPassType :: T r ParPassType -> Group r ParPassType
     GroupVarIdentifier :: T r VarIdentifier -> Group r VarIdentifier
     GroupLocalDef :: T r LocalDef -> Group r LocalDef
     GroupFuncDecl :: T r FuncDecl -> Group r FuncDecl
@@ -153,14 +139,6 @@ group x = case x of
     (FuncDef _ _ _) -> GroupFuncDef x
     (Header _ _ _) -> GroupHeader x
     (FparDef _ _) -> GroupFparDef x
-    (Integ) -> GroupDataType x
-    (Byte) -> GroupDataType x
-    (DType _) -> GroupObjectType x
-    (AType _ _) -> GroupObjectType x
-    (OType _) -> GroupType x
-    (PType _) -> GroupType x
-    (ByRef _) -> GroupParPassType x
-    (ByDefault _) -> GroupParPassType x
     (LocalDefFuncDef _) -> GroupLocalDef x
     (LocalDefFuncDecl _) -> GroupLocalDef x
     (LocalDefVarDef _) -> GroupLocalDef x

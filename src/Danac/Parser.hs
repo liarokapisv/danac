@@ -98,43 +98,32 @@ stringLiteral = do
 int :: Parser Integer
 int = lexeme L.decimal
 
-dataType :: Parser (LocatedT DataType)
-dataType = locatedt $ (symbol "int" *> pure Integ) <|> (symbol "byte" *> pure Byte)
+dataType :: Parser DataType
+dataType = (symbol "int" *> pure Integ) <|> (symbol "byte" *> pure Byte)
 
-objectType :: Parser (LocatedT ObjectType)
-objectType = do
+stype :: Parser Type
+stype = do
     d <- dataType
-    is <- many (located $ brackets int)
-    pure $ go d $ Prelude.reverse is
-        where go :: LocatedT DataType -> [Located Integer] -> LocatedT ObjectType
-              go x [] = DType x :&.: getTAnn x
-              go x ((i,s') : ns) = 
-                    let y@(_ :&.: s'') = go x ns
-                    in AType y i :&.: mergeSpans s' s''
-
-stype :: Parser (LocatedT Type)
-stype = locatedt $ 
-    try (do otype <- objectType
-            symbol "["
-            symbol "]"
-            pure $ PType otype)
-    <|> 
-    (do otype <- objectType
-        pure $ OType otype)
+    is <- many (brackets int)
+    pure $ Prelude.foldl AType (DType d) is
     
-fparType :: Parser (LocatedT ParPassType)
-fparType = locatedt $
-    (do symbol "ref" 
-        t <- stype 
-        pure $ ByRef t) <|>
+fancyType :: Parser FancyType
+fancyType = 
+    try (do symbol "ref" 
+            t <- stype 
+            pure $ Ref t) <|>
+    try (do t <- stype
+            symbol "[" 
+            symbol "]"
+            pure $ Pointer t) <|>
     (do t <- stype
-        pure $ ByDefault t)
+        pure $ Value t)
            
 fparDefs :: Parser [LocatedT FparDef]
 fparDefs = do
         is <- some $ located identifier
         symbol "as" 
-        f <- fparType
+        f <- fancyType
         pure $ [FparDef i f :&.: sp | (i, sp) <- is]
 
 header :: Parser (LocatedT Header)
@@ -159,7 +148,7 @@ varDefs = do
        symbol "var"
        ids <- some $ located identifier
        symbol "is"
-       t <- objectType
+       t <- stype
        pure $ [VarDef i t :&.: s | (i, s) <- ids]
 
 varId :: Parser (LocatedT VarIdentifier)

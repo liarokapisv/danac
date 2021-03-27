@@ -47,7 +47,7 @@ data Context = Context {
     labels :: [Text]
 }
 
-emptyContext = Context { frames = [], globals = ["readInteger", "writeString", "strlen"], labels=[] }
+emptyContext = Context { frames = [], globals = ["readInteger", "writeInteger", "readString", "writeString", "strlen"], labels=[] }
 
 withNamespace t names = mconcat $ intersperse "." $ reverse $ (t : names)
 
@@ -107,10 +107,6 @@ data NoAnnGroup i where
     NoAnnFuncDef :: NoAnnGroup FuncDef
     NoAnnHeader :: NoAnnGroup Header
     NoAnnFparDef :: NoAnnGroup FparDef
-    NoAnnDataType :: NoAnnGroup DataType
-    NoAnnObjectType :: NoAnnGroup ObjectType
-    NoAnnType :: NoAnnGroup Type
-    NoAnnParPassType :: NoAnnGroup ParPassType
     NoAnnLocalDef :: NoAnnGroup LocalDef
     NoAnnFuncDecl :: NoAnnGroup FuncDecl
     NoAnnVarDef :: NoAnnGroup VarDef
@@ -143,10 +139,6 @@ view y = case group y of
     GroupFuncDef x -> NoAnnView x NoAnnFuncDef
     GroupHeader x -> NoAnnView x NoAnnHeader
     GroupFparDef x -> NoAnnView x NoAnnFparDef
-    GroupDataType x -> NoAnnView x NoAnnDataType
-    GroupObjectType x -> NoAnnView x NoAnnObjectType
-    GroupType x -> NoAnnView x NoAnnType
-    GroupParPassType x -> NoAnnView x NoAnnParPassType
     GroupLocalDef x -> NoAnnView x NoAnnLocalDef
     GroupFuncDecl x -> NoAnnView x NoAnnFuncDecl
     GroupVarDef x -> NoAnnView x NoAnnVarDef
