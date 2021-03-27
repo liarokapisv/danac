@@ -117,6 +117,7 @@ data NoAnnGroup i where
     NoAnnCondStmt :: NoAnnGroup CondStmt
     NoAnnStmt :: NoAnnGroup Stmt
     NoAnnBlock :: NoAnnGroup Block
+    NoAnnFunction :: NoAnnGroup FuncIdentifier
     NoAnnFuncCall :: NoAnnGroup FuncCall
     NoAnnLvalue :: NoAnnGroup Lvalue
     NoAnnExpr :: NoAnnGroup Expr
@@ -125,18 +126,19 @@ data NoAnnGroup i where
 deriving instance (Show (NoAnnGroup i))
 
 data Ann i where
-    AnnVariable :: SourceSpan -> (Text, Int, Int) -> Ann Variable
+    AnnVariable :: SourceSpan -> (Text, Int, Int) -> Ann VarIdentifier
     NoAnn :: SourceSpan -> NoAnnGroup i -> Ann i
 
 deriving instance (Show (Ann i))
 
 data View r i where
-    VariableView :: T r Variable -> View r Variable
+    VariableView :: T r VarIdentifier -> View r VarIdentifier
     NoAnnView :: T r i -> NoAnnGroup i -> View r i
 
 view :: T r i -> View r i
 view y = case group y of
-    GroupVariable x -> VariableView x
+    GroupVarIdentifier x -> VariableView x
+    GroupFuncIdentifier x -> NoAnnView x NoAnnFunction
     GroupAst x -> NoAnnView x NoAnnAst
     GroupFuncDef x -> NoAnnView x NoAnnFuncDef
     GroupHeader x -> NoAnnView x NoAnnHeader
@@ -168,11 +170,11 @@ renameLoopLabel _ x = x
 renameAlg :: RAlg (T :&: SourceSpan) (Renamer (Term (T :&&: Ann))) 
 renameAlg (t :&: s) = 
     case view t of
-        VariableView (Variable name) -> Renamer $ Compose $ do
+        VariableView (VarIdentifier name) -> Renamer $ Compose $ do
             minfo <- asks $ lookVariable name
             case minfo of
                 Nothing -> pure $ Failure [UndefinedVariable name s]
-                Just info -> pure $ Success $ Variable name :&&.: AnnVariable s info
+                Just info -> pure $ Success $ VarIdentifier name :&&.: AnnVariable s info
         NoAnnView f@(FuncDef (header :*: _) ldefs _) p -> Renamer $ Compose $ do
             let mframe = createFrame header (fmap ffst ldefs)
             case mframe of
@@ -181,13 +183,11 @@ renameAlg (t :&: s) =
                     name' <- asks $ withNamespace name . fmap functionName . frames
                     local (\r -> r { frames = frame : frames r}) $
                         getCompose $ fmap (renameHeader name') $ defaultCase f p
-        NoAnnView (FuncCall name exprs) p -> Renamer $ Compose $ do
+        NoAnnView (FuncIdentifier name) p -> Renamer $ Compose $ do
             mf <- asks $ lookFunction name 
             case mf of
                 Nothing -> pure $ Failure [UndefinedFunction name s]
-                Just name' -> do
-                    let exprs' = sequenceA $ fmap (getRenamer . fsnd) exprs
-                    getCompose $ fmap (:&&.: NoAnn s p) $ FuncCall name' <$> exprs'
+                Just name' -> pure $ Success $ (FuncIdentifier name' :&&.: NoAnn s p)
         NoAnnView l@(StmtLoop (Just name) _) p -> Renamer $ Compose $ do
             found <- asks $ elem name . labels
             if not found 

@@ -12,7 +12,6 @@ library:
   - Danac.Util.Derive
   - Danac.Parser
   - Danac.Renamer
-    #- Danac.Ast
     #- Danac.Parser.Core
     #- Danac.Renamer.Core
   dependencies:

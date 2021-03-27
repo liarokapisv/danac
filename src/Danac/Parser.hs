@@ -162,12 +162,15 @@ varDefs = do
        t <- objectType
        pure $ [VarDef i t :&.: s | (i, s) <- ids]
 
-variable :: Parser (LocatedT Variable)
-variable = locatedt $ Variable <$> identifier
+varId :: Parser (LocatedT VarIdentifier)
+varId = locatedt $ VarIdentifier <$> identifier
+
+funcId :: Parser (LocatedT FuncIdentifier)
+funcId = locatedt $ FuncIdentifier <$> identifier
 
 lvalueHead :: Parser (LocatedT Lvalue)
 lvalueHead = locatedt $ 
-    (LvalueId <$> variable) <|> 
+    (LvalueId <$> varId) <|> 
     (LvalueStr <$> stringLiteral)
 
 lvalue :: Parser (LocatedT Lvalue)
@@ -204,7 +207,7 @@ expr :: Parser (LocatedT Expr)
 expr = makeExprParser exprTerm eoperators
 
 funcCall :: Parser (LocatedT FuncCall)
-funcCall = locatedt $ FuncCall <$> identifier <*> parens (sepBy expr (symbol ","))
+funcCall = locatedt $ FuncCall <$> funcId <*> parens (sepBy expr (symbol ","))
 
 coperators = [[unOp "not" CondNot], [binOp "and" CondAnd], [binOp "or" CondOr]]
 
@@ -242,7 +245,7 @@ cond = makeExprParser condTerm coperators
 
 procCall :: Parser (LocatedT FuncCall)
 procCall = locatedt $ do
-    i <- identifier
+    i <- funcId
     symbol ":"
     es <- sepBy expr (symbol ",")
     pure $ FuncCall i es

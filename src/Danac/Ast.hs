@@ -26,7 +26,8 @@ data DataType
 data ObjectType 
 data Type 
 data ParPassType 
-data Variable
+data FuncIdentifier
+data VarIdentifier
 data LocalDef
 data FuncDecl
 data VarDef
@@ -83,11 +84,13 @@ data T r i where
 
     Block :: [r Stmt] -> T r Block
 
-    FuncCall :: Text -> [r Expr] -> T r FuncCall
+    FuncIdentifier :: Text -> T r FuncIdentifier
 
-    Variable :: Text -> T r Variable
+    FuncCall :: r FuncIdentifier -> [r Expr] -> T r FuncCall
+
+    VarIdentifier :: Text -> T r VarIdentifier
     
-    LvalueId :: r Variable -> T r Lvalue
+    LvalueId :: r VarIdentifier -> T r Lvalue
     LvalueStr :: Text -> T r Lvalue
     LvalueAx :: r Lvalue -> r Expr -> T r Lvalue
     ExprInt :: Integer -> T r Expr
@@ -131,13 +134,14 @@ data Group r i where
     GroupObjectType :: T r ObjectType -> Group r ObjectType
     GroupType :: T r Type -> Group r Type
     GroupParPassType :: T r ParPassType -> Group r ParPassType
-    GroupVariable :: T r Variable -> Group r Variable
+    GroupVarIdentifier :: T r VarIdentifier -> Group r VarIdentifier
     GroupLocalDef :: T r LocalDef -> Group r LocalDef
     GroupFuncDecl :: T r FuncDecl -> Group r FuncDecl
     GroupVarDef :: T r VarDef -> Group r VarDef
     GroupCondStmt :: T r CondStmt -> Group r CondStmt
     GroupStmt :: T r Stmt -> Group r Stmt
     GroupBlock :: T r Block -> Group r Block
+    GroupFuncIdentifier :: T r FuncIdentifier -> Group r FuncIdentifier
     GroupFuncCall :: T r FuncCall -> Group r FuncCall
     GroupLvalue :: T r Lvalue -> Group r Lvalue
     GroupExpr :: T r Expr -> Group r Expr
@@ -173,8 +177,9 @@ group x = case x of
     (StmtBreak _) -> GroupStmt x
     (StmtContinue _) -> GroupStmt x
     (Block _) -> GroupBlock x
+    (FuncIdentifier _) -> GroupFuncIdentifier x
     (FuncCall _ _) -> GroupFuncCall x
-    (Variable _) -> GroupVariable x
+    (VarIdentifier _) -> GroupVarIdentifier x
     (LvalueId _) -> GroupLvalue x
     (LvalueStr _) -> GroupLvalue x
     (LvalueAx _ _) -> GroupLvalue x
