@@ -5,4 +5,7 @@ module Danac.Util.SourceSpan where
 import Text.Megaparsec.Pos
 
 data SourceSpan = SS SourcePos SourcePos
-    deriving (Eq, Show)
+    deriving Eq
+
+instance Show (SourceSpan) where
+    show _ = ""

@@ -36,13 +36,13 @@ data Expr
 data Cond
 
 data DataType = Integ | Byte
-    deriving Show
+    deriving (Eq, Show)
 data Type = DType DataType | AType Type Integer
-    deriving Show
-data FancyType = Value Type | Ref Type | Pointer Type
-    deriving Show
+    deriving (Eq, Show)
+data FancyType = Value Type | Ref DataType | Pointer Type
+    deriving (Eq, Show)
 data FunctionType = FunctionType (Maybe DataType) [FancyType]
-    deriving Show
+    deriving (Eq, Show)
 
 data T r i where
     Ast :: r FuncDef -> T r Ast

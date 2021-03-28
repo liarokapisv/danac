@@ -18,7 +18,7 @@ import Danac.Ast
 import Danac.Util.Annotation
 import Danac.Util.SourceSpan
 import Data.Text (Text)
-import Validation
+import Data.Validation
 import Control.Monad.Reader
 import Data.Comp.Multi.Ops (ffst, fsnd, (:*:)(..))
 import Data.Comp.Multi.Algebra
@@ -139,7 +139,7 @@ deriving instance (Show (NoAnnGroup i))
 data Ann i where
     AnnVariable :: SourceSpan -> (Text, Int, Int, FancyType) -> Ann VarIdentifier
     AnnFunction :: SourceSpan -> FunctionType -> Ann FuncIdentifier
-    NoAnn :: SourceSpan -> NoAnnGroup i -> Ann i
+    NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
 
 deriving instance (Show (Ann i))
 

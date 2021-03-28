@@ -12,14 +12,13 @@ library:
   - Danac.Util.Derive
   - Danac.Parser
   - Danac.Renamer
-    #- Danac.Parser.Core
-    #- Danac.Renamer.Core
+  - Danac.TypeChecker
   dependencies:
   - megaparsec
   - parser-combinators
   - text
   - containers
-  - validation-selective
+  - validation
   - mtl
   - compdata
   - template-haskell
@@ -38,5 +37,5 @@ executables:
     - megaparsec
     - pretty-simple
     - mtl
-    - validation-selective
+    - validation
     - compdata

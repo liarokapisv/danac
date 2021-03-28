@@ -110,7 +110,7 @@ stype = do
 fancyType :: Parser FancyType
 fancyType = 
     try (do symbol "ref" 
-            t <- stype 
+            t <- dataType 
             pure $ Ref t) <|>
     try (do t <- stype
             symbol "[" 
