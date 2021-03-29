@@ -235,8 +235,8 @@ cond = makeExprParser condTerm coperators
 procCall :: Parser (LocatedT FuncCall)
 procCall = locatedt $ do
     i <- funcId
-    symbol ":"
-    es <- sepBy expr (symbol ",")
+    es <- (do symbol ":"
+              sepBy expr (symbol ",")) <|> pure []
     pure $ FuncCall i es
 
 ifStmt :: Parser (LocatedT CondStmt)

@@ -106,7 +106,7 @@ typecheckAlg (w :&&: ann) =
         VariableView _ -> case ann of
                             RN.AnnVariable s (_,_,_, t) -> TC $ Success $ EvalVariable s $ toLvalueType t
         FunctionView (FuncIdentifier n) -> case ann of
-                            RN.AnnFunction s t -> TC $ Success $ EvalFunction s n t
+                            RN.AnnFunction s (_,t) -> TC $ Success $ EvalFunction s n t
         LvalueView (LvalueId (TC t)) -> TC $ fmap (\(EvalVariable s x) -> EvalLvalue s x) t
         LvalueView (LvalueStr t) -> let RN.NoAnn s _ = ann in TC $ Success $ EvalLvalue s $ LType $ AType (DType Byte) (toInteger (Data.Text.length t) + 1)
         LvalueView (LvalueAx (TC l) (TC i)) -> TC $ bindValidation (go <$> l <*> i) id

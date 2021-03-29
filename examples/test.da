@@ -1,0 +1,11 @@
+def main
+    var i is int
+    def foo: source as byte[4]
+        def bar: fooz as byte[]
+            def faz
+                writeString: source
+                writeString: fooz
+                writeChar: (source[0])
+            faz
+        bar: source
+    foo: "hel"

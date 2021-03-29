@@ -1,6 +1,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
@@ -9,11 +10,15 @@ import qualified Data.Text.IO as TIO
 import Danac.Parser (ast)
 import Danac.Renamer (rename, emptyContext)
 import Danac.TypeChecker (typecheck)
+import Danac.Codegen (codegen)
 import Text.Megaparsec (parse)
 import Text.Pretty.Simple (pPrint)
 import Data.Validation
 import Control.Monad.Reader 
 import Data.Functor.Compose
+import LLVM.Module
+import LLVM.Context
+import qualified Data.ByteString.Char8 as B
 
 main :: IO ()
 main = do
@@ -25,5 +30,9 @@ main = do
         Right pt -> case runReader (getCompose $ rename pt) emptyContext of
                         Failure errors -> pPrint errors
                         Success t -> case typecheck t of
-                                        [] -> pPrint t
+                                        [] -> do
+                                            --pPrint t
+                                            assembly <- withContext $ \context -> 
+                                                            withModuleFromAST context (codegen "test" t) moduleLLVMAssembly
+                                            B.putStr assembly
                                         errs -> pPrint errs

@@ -13,6 +13,7 @@ library:
   - Danac.Parser
   - Danac.Renamer
   - Danac.TypeChecker
+  - Danac.Codegen
   dependencies:
   - megaparsec
   - parser-combinators
@@ -22,6 +23,8 @@ library:
   - mtl
   - compdata
   - template-haskell
+  - llvm-hs-pure
+  - bytestring
 
 executables:
   danac-exe:
@@ -39,3 +42,5 @@ executables:
     - mtl
     - validation
     - compdata
+    - bytestring
+    - llvm-hs

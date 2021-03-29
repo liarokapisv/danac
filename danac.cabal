@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 11fc48f7469f4684512df68739fc1b87effb214f37ac2ffa0f461eb0cf16626a
+-- hash: 4b3abdfba693b479ca6967ff223aee3c8d324a18da1afb97fb917646f77f1374
 
 name:           danac
 version:        0.0.0
@@ -19,14 +19,17 @@ library
       Danac.Parser
       Danac.Renamer
       Danac.TypeChecker
+      Danac.Codegen
   other-modules:
       Paths_danac
   hs-source-dirs:
       src
   build-depends:
       base
+    , bytestring
     , compdata
     , containers
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , parser-combinators
@@ -44,8 +47,10 @@ executable danac-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base
+    , bytestring
     , compdata
     , danac
+    , llvm-hs
     , megaparsec
     , mtl
     , pretty-simple

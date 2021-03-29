@@ -53,6 +53,7 @@ emptyContext = Context { frames = [],
                          globals = [("readInteger", FunctionType (Just Integ) []), 
                                     ("writeInteger", FunctionType Nothing [Value (DType Integ)]), 
                                     ("writeString", FunctionType Nothing [Pointer (DType Byte)]), 
+                                    ("writeChar", FunctionType Nothing [Value (DType Byte)]), 
                                     ("strlen", FunctionType (Just Integ) [Pointer (DType Byte)])], 
                          labels=[] }
 
@@ -66,17 +67,17 @@ lookVariable t c = go 0 (frames c)
                         Just (i,(_,typ)) -> Just (withNamespace name (fmap functionName fs), n, i, typ)
                         Nothing -> go (n+1) fs
 
-lookFunction :: Text -> Context -> Maybe (Text, FunctionType)
-lookFunction t c = case go (frames c) of
+lookFunction :: Text -> Context -> Maybe (Text, Maybe Int, FunctionType)
+lookFunction t c = case go 0 (frames c) of
                         Just n -> Just n
                         Nothing -> case find ((==t).fst) (globals c) of
-                                      Just (_,typ) -> Just (t, typ)
+                                      Just (_,typ) -> Just (t, Nothing, typ)
                                       Nothing -> Nothing
-    where go [] = Nothing
-          go fs@(f : fs') =
+    where go _ [] = Nothing
+          go n fs@(f : fs') =
             case find ((==t).fst) (functions f) of
-                    Just (_, typ) -> Just $ (withNamespace t (fmap functionName fs), typ)
-                    Nothing -> go fs'
+                    Just (_, typ) -> Just $ (withNamespace t (fmap functionName fs), Just n, typ)
+                    Nothing -> go (n+1) fs'
 
 lookLabel :: Text -> Context -> Maybe Text
 lookLabel t c = case dropWhile (/= t) (labels c) of
@@ -138,7 +139,7 @@ deriving instance (Show (NoAnnGroup i))
 
 data Ann i where
     AnnVariable :: SourceSpan -> (Text, Int, Int, FancyType) -> Ann VarIdentifier
-    AnnFunction :: SourceSpan -> FunctionType -> Ann FuncIdentifier
+    AnnFunction :: SourceSpan -> (Maybe Int, FunctionType) -> Ann FuncIdentifier
     NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
 
 deriving instance (Show (Ann i))
@@ -188,7 +189,7 @@ renameAlg (t :&: s) =
             mf <- asks $ lookFunction name 
             case mf of
                 Nothing -> pure $ Failure [UndefinedFunction name s]
-                Just (name',typ) -> pure $ Success $ (FuncIdentifier name' :&&.: AnnFunction s typ)
+                Just (name',n,typ) -> pure $ Success $ (FuncIdentifier name' :&&.: AnnFunction s (n,typ))
         NoAnnView f@(FuncDef (header :*: _) ldefs _) p -> Renamer $ Compose $ do
             let mframe = createFrame header (fmap ffst ldefs)
             case mframe of
