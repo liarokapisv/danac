@@ -1,13 +1,15 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Danac.TypeChecker where
 
 import Data.Comp.Multi.Algebra
-import Data.Comp.Multi.HFoldable
 import Data.Comp.Multi.Term
+import Data.Comp.Multi.HTraversable (htraverse)
 import Data.Validation
 
 import Danac.Ast
@@ -30,15 +32,15 @@ toLvalueType (Ref x) = LType (DType x)
 data Eval i where
     EvalVariable :: SourceSpan -> LvalueType -> Eval VarIdentifier
     EvalHeader :: SourceSpan -> Maybe DataType -> Eval Header
-    EvalFunction :: SourceSpan -> Text -> FunctionType -> Eval FuncIdentifier
+    EvalFunction :: Text -> FunctionType -> Eval FuncIdentifier
     EvalLvalue :: SourceSpan -> LvalueType -> Eval Lvalue
     EvalExpr :: SourceSpan -> ValueType -> Eval Expr
     EvalFuncCall :: SourceSpan -> Text -> Maybe DataType -> Eval FuncCall
-    EvalCondStmt :: SourceSpan -> Maybe (Maybe DataType) -> Eval CondStmt
-    EvalStmt :: SourceSpan -> Maybe (Maybe DataType) -> Eval Stmt
+    EvalCondStmt :: Maybe (Maybe DataType) -> Eval CondStmt
+    EvalStmt :: Maybe (Maybe DataType) -> Eval Stmt
     EvalBlock :: SourceSpan -> Maybe (Maybe DataType) -> Eval Block
-    NoEval :: SourceSpan -> !(NoEvalGroup i) -> Eval i
-    
+    NoEval :: !(NoEvalGroup i) -> Eval i
+
 data NoEvalGroup i where
     NoEvalAst :: NoEvalGroup Ast
     NoEvalFuncDef :: NoEvalGroup FuncDef
@@ -98,18 +100,18 @@ data Error = LvalueAxLhsWrongType SourceSpan LvalueType
 
 type Validated = Validation [Error]
 
-newtype TC i = TC { unTC :: Validated (Eval i) }
+type TC = F Validated Eval
 
 typecheckAlg :: Alg (T :&&: RN.Ann) TC
 typecheckAlg (w :&&: ann) = 
     case view w of
         VariableView _ -> case ann of
-                            RN.AnnVariable s (_,_,_, t) -> TC $ Success $ EvalVariable s $ toLvalueType t
+                            RN.AnnVariable s (_,_,_, t) -> F $ Success $ EvalVariable s $ toLvalueType t
         FunctionView (FuncIdentifier n) -> case ann of
-                            RN.AnnFunction s (_,t) -> TC $ Success $ EvalFunction s n t
-        LvalueView (LvalueId (TC t)) -> TC $ fmap (\(EvalVariable s x) -> EvalLvalue s x) t
-        LvalueView (LvalueStr t) -> let RN.NoAnn s _ = ann in TC $ Success $ EvalLvalue s $ LType $ AType (DType Byte) (toInteger (Data.Text.length t) + 1)
-        LvalueView (LvalueAx (TC l) (TC i)) -> TC $ bindValidation (go <$> l <*> i) id
+                            RN.AnnFunction _ (_,t) -> F $ Success $ EvalFunction n t
+        LvalueView (LvalueId (F t)) -> F $ fmap (\(EvalVariable s x) -> EvalLvalue s x) t
+        LvalueView (LvalueStr t) -> let RN.NoAnn s _ = ann in F $ Success $ EvalLvalue s $ LType $ AType (DType Byte) (toInteger (Data.Text.length t) + 1)
+        LvalueView (LvalueAx (F l) (F i)) -> F $ bindValidation (go <$> l <*> i) id
             where go :: Eval Lvalue -> Eval Expr -> Validated (Eval Lvalue)
                   go (EvalLvalue sl tl) (EvalExpr sr tr) = 
                     case (derefType tl, isIntegralType tr) of
@@ -128,9 +130,9 @@ typecheckAlg (w :&&: ann) =
         ExprView z ->
             let RN.NoAnn s _ = ann in
                 case z of
-                    ExprInt _ -> TC $ Success $ EvalExpr s $ RValue Integ
-                    ExprChar _ -> TC $ Success $ EvalExpr s $ RValue Byte
-                    ExprLvalue (TC x) -> TC $ fmap (\(EvalLvalue _ t) -> EvalExpr s (LValue t)) x
+                    ExprInt _ -> F $ Success $ EvalExpr s $ RValue Integ
+                    ExprChar _ -> F $ Success $ EvalExpr s $ RValue Byte
+                    ExprLvalue (F x) -> F $ fmap (\(EvalLvalue _ t) -> EvalExpr s (LValue t)) x
                     ExprAdd lhs rhs-> binOp s lhs rhs
                     ExprSub lhs rhs-> binOp s lhs rhs
                     ExprMul lhs rhs-> binOp s lhs rhs
@@ -138,15 +140,15 @@ typecheckAlg (w :&&: ann) =
                     ExprMod lhs rhs-> binOp s lhs rhs
                     ExprOr  lhs rhs-> binOp s lhs rhs
                     ExprAnd lhs rhs-> binOp s lhs rhs
-                    ExprMinus (TC x) -> TC $ fmap (\(EvalExpr _ t) -> EvalExpr s t) x
-                    ExprNot (TC x) -> TC $ fmap (\(EvalExpr _ t) -> EvalExpr s t) x
-                    ExprTrue -> TC $ Success $ EvalExpr s $ RValue Byte
-                    ExprFalse -> TC $ Success $ EvalExpr s $ RValue Byte
-                    ExprFuncCall (TC x) -> TC $ bindValidation (validFuncCall <$> x) id
+                    ExprMinus (F x) -> F $ fmap (\(EvalExpr _ t) -> EvalExpr s t) x
+                    ExprNot (F x) -> F $ fmap (\(EvalExpr _ t) -> EvalExpr s t) x
+                    ExprTrue -> F $ Success $ EvalExpr s $ RValue Byte
+                    ExprFalse -> F $ Success $ EvalExpr s $ RValue Byte
+                    ExprFuncCall (F x) -> F $ bindValidation (validFuncCall <$> x) id
                     where validFuncCall :: Eval FuncCall -> Validated (Eval Expr)
                           validFuncCall (EvalFuncCall s t Nothing) = Failure $ [ExprProcedureCallNotAllowed s t]
                           validFuncCall (EvalFuncCall s _ (Just dt)) = Success $ EvalExpr s $ RValue dt
-                          binOp s (TC lhs) (TC rhs) = TC $ bindValidation (binOp' s <$> lhs <*> rhs) id 
+                          binOp s (F lhs) (F rhs) = F $ bindValidation (binOp' s <$> lhs <*> rhs) id 
                           binOp' :: SourceSpan -> Eval Expr -> Eval Expr -> Validated (Eval Expr)
                           binOp' s (EvalExpr sl tl) (EvalExpr sr tr) =
                                     case compatibleTypes tl tr of
@@ -158,9 +160,9 @@ typecheckAlg (w :&&: ann) =
                           compatibleTypes (LValue (LType (DType lhs))) (RValue rhs) | lhs == rhs = Just lhs
                           compatibleTypes (LValue (LType (DType lhs))) (LValue (LType (DType rhs))) | lhs == rhs = Just lhs
                           compatibleTypes _ _ = Nothing
-        FuncCallView (FuncCall (TC name) es)  -> let RN.NoAnn s _ = ann in TC $ bindValidation (go s <$> name <*> (traverse unTC es)) id
+        FuncCallView (FuncCall (F name) es)  -> let RN.NoAnn s _ = ann in F $ bindValidation (go s <$> name <*> (traverse unF es)) id
                 where go :: SourceSpan -> Eval FuncIdentifier -> [Eval Expr] -> Validated (Eval FuncCall)
-                      go s (EvalFunction _ t ft@(FunctionType mdt fts)) es' =
+                      go s (EvalFunction t ft@(FunctionType mdt fts)) es' =
                         case areCompatible 0 fts es' of
                                 [] -> Success $ EvalFuncCall s t mdt
                                 errs -> Failure errs
@@ -182,56 +184,98 @@ typecheckAlg (w :&&: ann) =
         StmtView z -> 
             let RN.NoAnn s _ = ann in
                 case z of
-                    StmtSkip -> TC $ Success $ EvalStmt s Nothing
-                    StmtBreak _ -> TC $ Success $ EvalStmt s Nothing
-                    StmtContinue _ -> TC $ Success $ EvalStmt s Nothing
-                    StmtProcCall (TC c) -> TC $ fmap (\(EvalFuncCall _ _ _) -> EvalStmt s Nothing) c
-                    StmtExit -> TC $ Success $ EvalStmt s (Just Nothing)
-                    StmtReturn (TC e) -> TC $ bindValidation (validRetType <$> e) id
+                    StmtSkip -> F $ Success $ EvalStmt Nothing
+                    StmtBreak _ -> F $ Success $ EvalStmt Nothing
+                    StmtContinue _ -> F $ Success $ EvalStmt Nothing
+                    StmtProcCall (F c) -> F $ fmap (\(EvalFuncCall _ _ _) -> EvalStmt Nothing) c
+                    StmtExit -> F $ Success $ EvalStmt (Just Nothing)
+                    StmtReturn (F e) -> F $ bindValidation (validRetType <$> e) id
                         where validRetType :: Eval Expr -> Validated (Eval Stmt)
-                              validRetType (EvalExpr _ (RValue dt)) = Success $ EvalStmt s (Just $ Just dt)
+                              validRetType (EvalExpr _ (RValue dt)) = Success $ EvalStmt (Just $ Just dt)
                               validRetType (EvalExpr _ (LValue (LPointer t))) = Failure $ [ReturnPointerType s t]
                               validRetType (EvalExpr _ (LValue (LType (AType t i)))) = Failure $ [ReturnArrayType s t i]
-                              validRetType (EvalExpr _ (LValue (LType (DType dt)))) = Success $ EvalStmt s (Just $ Just dt)
-                    StmtLoop _ (TC b) -> TC $ fmap (\(EvalBlock _ mdt) -> EvalStmt s mdt) b
-                    StmtAssign (TC lhs) (TC rhs) -> TC $ bindValidation (go <$> lhs <*> rhs) id
+                              validRetType (EvalExpr _ (LValue (LType (DType dt)))) = Success $ EvalStmt (Just $ Just dt)
+                    StmtLoop _ (F b) -> F $ fmap (\(EvalBlock _ mdt) -> EvalStmt mdt) b
+                    StmtAssign (F lhs) (F rhs) -> F $ bindValidation (go <$> lhs <*> rhs) id
                         where go :: Eval Lvalue -> Eval Expr -> Validated (Eval Stmt)
-                              go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (RValue r)) | l == r = Success $ EvalStmt s Nothing
-                              go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (LValue (LType (DType r)))) | l == r = Success $ EvalStmt s Nothing
+                              go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (RValue r)) | l == r = Success $ EvalStmt Nothing
+                              go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (LValue (LType (DType r)))) | l == r = Success $ EvalStmt Nothing
                               go (EvalLvalue sl tl) (EvalExpr sr tr) = Failure $ [AssignTypeMismatch s (sl,tl) (sr,tr)]
-                    StmtIf (TC c) cs mb -> TC $ bindValidation (go <$> c <*> traverse unTC cs <*> traverse unTC mb) id
+                    StmtIf (F c) cs mb -> F $ bindValidation (go <$> c <*> traverse unF cs <*> traverse unF mb) id
                         where go :: Eval CondStmt -> [Eval CondStmt] -> Maybe (Eval Block) -> Validated (Eval Stmt)
-                              go (EvalCondStmt _ x) ys mz = 
-                                case validStmts s (catMaybes $ [x] ++ fmap (\(EvalCondStmt _ t) -> t) ys ++ maybeToList (fmap (\(EvalBlock _ t) -> t) mz)) of
+                              go (EvalCondStmt x) ys mz = 
+                                case validStmts s (catMaybes $ [x] ++ fmap (\(EvalCondStmt t) -> t) ys ++ maybeToList (fmap (\(EvalBlock _ t) -> t) mz)) of
                                     Left err -> Failure $ [err]
-                                    Right mdt -> Success $ EvalStmt s mdt
-        CondStmtView (CondStmt _ (TC b)) -> let RN.NoAnn s _ = ann in TC $ fmap (\(EvalBlock _ t) -> EvalCondStmt s t) b
+                                    Right mdt -> Success $ EvalStmt mdt
+        CondStmtView (CondStmt _ (F b)) -> F $ fmap (\(EvalBlock _ t) -> EvalCondStmt t) b
         BlockView (Block stmts) -> 
             let RN.NoAnn s _ = ann
-                go xs = case validStmts s (catMaybes $ fmap (\(EvalStmt _ t) -> t) xs) of
+                go xs = case validStmts s (catMaybes $ fmap (\(EvalStmt t) -> t) xs) of
                                     Left err -> Failure $ [err]
                                     Right mdt -> Success $ EvalBlock s mdt
-                    in TC $ bindValidation (go <$> traverse unTC stmts) id
+                    in F $ bindValidation (go <$> traverse unF stmts) id
         HeaderView (Header _ mdt _) -> 
-            let RN.NoAnn s _ = ann in TC $ Success $ EvalHeader s mdt
-        NoEvalView (FuncDef (TC h) lds (TC b)) p -> 
+            let RN.NoAnn s _ = ann in F $ Success $ EvalHeader s mdt
+        NoEvalView (FuncDef (F h) lds (F b)) p -> 
             let RN.NoAnn s _ = ann 
                 go :: Eval Header -> [Eval LocalDef] -> Eval Block -> Validated (Eval FuncDef)
-                go (EvalHeader _ (Just x)) _ (EvalBlock _ (Just (Just y))) | x == y = Success $ NoEval s p
+                go (EvalHeader _ (Just x)) _ (EvalBlock _ (Just (Just y))) | x == y = Success $ NoEval p
                 go (EvalHeader sl (Just x)) _ (EvalBlock sr (Just (Just y))) | otherwise = Failure $ [WrongReturnType s (sl, x) (sr, y)]
                 go (EvalHeader sl (Just x)) _ (EvalBlock _ (Just Nothing)) = Failure $ [NoReturnInFunctionWithReturnType s (sl, x)]
-                go (EvalHeader _ Nothing) _ (EvalBlock _ (Just Nothing)) = Success $ NoEval s p
+                go (EvalHeader _ Nothing) _ (EvalBlock _ (Just Nothing)) = Success $ NoEval p
                 go (EvalHeader _ Nothing) _ (EvalBlock sr (Just (Just y))) = Failure $ [ReturnInFunctionWithNoReturnType s (sr, y)]
-                go (EvalHeader _ Nothing) _ (EvalBlock _ Nothing) = Success $ NoEval s p
+                go (EvalHeader _ Nothing) _ (EvalBlock _ Nothing) = Success $ NoEval p
                 go (EvalHeader sl (Just x)) _ (EvalBlock _ Nothing) = Failure $ [NoReturnInFunctionWithReturnType s (sl, x)]
-                    in TC $ bindValidation (go <$> h <*> traverse unTC lds <*> b) id
-        NoEvalView x p -> let RN.NoAnn s _ = ann in TC $ fmap (const $ NoEval s p) $ hfoldMap ((fmap $ const ()).unTC) x
+                    in F $ bindValidation (go <$> h <*> traverse unF lds <*> b) id
+        NoEvalView x p -> F $ htraverse unF x *> (Success $ NoEval p)
         where validStmts :: SourceSpan -> [Maybe DataType] -> Either Error (Maybe (Maybe DataType))
               validStmts _ [] = Right Nothing
               validStmts _ (t : xs) | all (==t) xs = Right $ Just t
               validStmts s _ = Left $ InconsistentReturnTypes s
 
-typecheck :: Term (T :&&: RN.Ann) i -> [Error]
-typecheck x = case (unTC $ cata typecheckAlg x) of
-                Failure errs -> errs
-                Success _ -> []
+data Ann i where
+    AnnVariable :: SourceSpan -> Text -> Int -> Int -> FancyType -> LvalueType -> Ann VarIdentifier
+    AnnHeader :: SourceSpan -> Maybe DataType -> Ann Header
+    AnnFunction :: SourceSpan -> Text -> Maybe Int -> FunctionType -> Ann FuncIdentifier
+    AnnLvalue :: SourceSpan -> LvalueType -> Ann Lvalue
+    AnnExpr :: SourceSpan -> ValueType -> Ann Expr
+    AnnFuncCall :: SourceSpan -> Text -> Maybe DataType -> Ann FuncCall
+    NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
+
+data NoAnnGroup i where
+    NoAnnAst :: NoAnnGroup Ast
+    NoAnnFuncDef :: NoAnnGroup FuncDef
+    NoAnnFparDef :: NoAnnGroup FparDef
+    NoAnnLocalDef :: NoAnnGroup LocalDef
+    NoAnnFuncDecl :: NoAnnGroup FuncDecl
+    NoAnnVarDef :: NoAnnGroup VarDef
+    NoAnnCond :: NoAnnGroup Cond
+    NoAnnCondStmt :: NoAnnGroup CondStmt
+    NoAnnStmt :: NoAnnGroup Stmt
+    NoAnnBlock :: NoAnnGroup Block
+
+deriving instance (Show (Ann i))
+deriving instance (Show (NoAnnGroup i))
+
+mergeAnns :: RN.Ann i -> Eval i -> Ann i
+mergeAnns (RN.AnnVariable s (x, y, z, t)) (EvalVariable _ l) = AnnVariable s x y z t l
+mergeAnns (RN.AnnFunction s (x, _)) (EvalFunction t y) = AnnFunction s t x y
+mergeAnns (RN.NoAnn s RN.NoAnnHeader) (EvalHeader _ t) = AnnHeader s t
+mergeAnns (RN.NoAnn s RN.NoAnnLvalue) (EvalLvalue _ t) = AnnLvalue s t
+mergeAnns (RN.NoAnn s RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr s t
+mergeAnns (RN.NoAnn s RN.NoAnnFuncCall) (EvalFuncCall _ n t) = AnnFuncCall s n t
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalAst) = NoAnn s NoAnnAst
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalFuncDef) = NoAnn s NoAnnFuncDef
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalFparDef) = NoAnn s NoAnnFparDef
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalLocalDef) = NoAnn s NoAnnLocalDef
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalFuncDecl) = NoAnn s NoAnnFuncDecl
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalVarDef) = NoAnn s NoAnnVarDef
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalCond) = NoAnn s NoAnnCond
+mergeAnns (RN.NoAnn s _) (EvalCondStmt _) = NoAnn s NoAnnCondStmt
+mergeAnns (RN.NoAnn s _) (EvalStmt _) = NoAnn s NoAnnStmt
+mergeAnns (RN.NoAnn s _) (EvalBlock _ _) = NoAnn s NoAnnBlock
+
+typecheck :: Term (T :&&: RN.Ann) i -> Either [Error] (Term (T :&&: Ann) i)
+typecheck x = case (unF $ extend typecheckAlg x) of
+                Failure errs -> Left errs
+                Success t -> Right $ combine mergeAnns t

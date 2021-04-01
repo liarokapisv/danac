@@ -30,9 +30,8 @@ main = do
         Right pt -> case runReader (getCompose $ rename pt) emptyContext of
                         Failure errors -> pPrint errors
                         Success t -> case typecheck t of
-                                        [] -> do
-                                            --pPrint t
+                                        Right c -> do
                                             assembly <- withContext $ \context -> 
-                                                            withModuleFromAST context (codegen "test" t) moduleLLVMAssembly
+                                                            withModuleFromAST context (codegen "test" c) moduleLLVMAssembly
                                             B.putStr assembly
-                                        errs -> pPrint errs
+                                        Left errs -> pPrint errs

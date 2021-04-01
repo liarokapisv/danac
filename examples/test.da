@@ -1,11 +1,12 @@
 def main
     var i is int
-    def foo: source as byte[4]
-        def bar: fooz as byte[]
-            def faz
-                writeString: source
-                writeString: fooz
-                writeChar: (source[0])
-            faz
-        bar: source
-    foo: "hel"
+    i := 0
+    loop:
+        writeChar: "Hello world!"[i]
+        if i % 2 = 0:
+            writeString: "- Even!\n"
+        else:
+            writeString: "- Odd!\n"
+        i := i + 1
+        if i = 12:
+            break

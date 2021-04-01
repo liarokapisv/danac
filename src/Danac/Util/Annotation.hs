@@ -14,6 +14,7 @@ import Data.Comp.Multi.HTraversable
 import Data.Comp.Multi.Show
 import Data.Comp.Multi.Term
 import Control.Monad (liftM)
+import Data.Comp.Multi.Ops (fsnd, (:*:)(..))
 
 data (f :&: a) (g ::  * -> *) e = !(f g e) :&: !a
 pattern x :&.: y = Term (x :&: y)
@@ -102,3 +103,20 @@ evolve = cata go
 regress :: HFunctor f => Term (f :&&: K a) e -> Term (f :&: a) e
 regress = cata go
     where go (x :&&: K y) = (x :&.: y)
+
+newtype F f (a :: * -> *) i = F { unF :: f (a i) }
+
+extendAlg :: (Applicative f, HTraversable t) => Alg (t :&&: a) (F f e) -> Alg (t :&&: a) (F f (Term (t :&&: (a :*: e))))
+extendAlg f (x :&&: ann) = let eval = unF $ f (hfmap (F . fmap (fsnd . getTAnnI) . unF) x :&&: ann)
+                               ann' = fmap (ann :*:) $ eval
+                               lhs = htraverse unF x
+                            in F $ (:&&.:) <$> lhs <*> ann'
+
+extend :: (Applicative f, HTraversable t) => Alg (t :&&: a) (F f e) -> Term (t :&&: a) i -> F f (Term (t :&&: (a :*: e))) i
+extend f = cata (extendAlg f)
+
+combineAlg :: (forall i . a i -> b i -> c i) -> Alg (t :&&: (a :*: b)) (Term (t :&&: c))
+combineAlg f (x :&&: (y :*: z)) = x :&&.: f y z
+
+combine :: HFunctor t => (forall j . a j -> b j -> c j) -> Term (t :&&: (a :*: b)) i -> Term (t :&&: c) i
+combine f = cata (combineAlg f)
