@@ -12,6 +12,7 @@ import Danac.Renamer (rename)
 import Danac.TypeChecker (typecheck)
 import Danac.Codegen (codegen)
 import Text.Megaparsec (parse)
+import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Pretty.Simple (pPrint)
 import LLVM.Module
 import LLVM.Context
@@ -55,7 +56,7 @@ main = do
     text <- TIO.readFile (file opts)
     let tree = parse ast "" text
     case tree of
-        Left err -> pPrint err
+        Left err -> putStr $ errorBundlePretty err
         Right pt | dumpParser opts -> pPrint pt
                  | otherwise ->  
                     case rename pt of
