@@ -18,7 +18,7 @@ import LLVM.Context
 import LLVM.AST
 import Options.Applicative
 import Data.Foldable (traverse_)
-import qualified Data.ByteString.Char8()
+import qualified Data.ByteString.Char8 as B
 
 import System.IO
 import System.Directory
@@ -27,17 +27,25 @@ import System.Posix.Temp
 import Control.Exception (bracket)
 
 data Options = Options {
-    file :: String,
+    input :: String,
+    output :: String,
     dumpParser :: Bool,
     dumpRenamer :: Bool,
     dumpTypeChecker :: Bool,
-    dumpCodegen :: Bool
+    dumpCodegen :: Bool,
+    dumpASM ::Bool
 }
 
 options :: Parser Options
 options = Options <$> argument str 
                         (metavar "FILE"
-                        <> help "File to compile")
+                        <> help "Read input from FILE")
+                  <*> strOption
+                        (long "output"
+                        <> short 'o'
+                        <> metavar "FILE"
+                        <> Options.Applicative.value "a.out"
+                        <> help "Write output to FILE")
                   <*> switch
                         (long "dump-parser-tree"
                         <> short 'p'
@@ -53,7 +61,11 @@ options = Options <$> argument str
                   <*> switch
                         (long "dump-codegen-tree"
                         <> short 'c'
-                        <> help "Dumps post-codegen tree")
+                        <> help "Dumps post-codegen llvm-hs-pure tree")
+                  <*> switch
+                        (long "dump-llvm-asm"
+                        <> short 'l'
+                        <> help "Dumps post-codegen llvm assembly")
 
 compile :: LLVM.AST.Module -> FilePath -> IO ()
 compile llvmModule outfile =
@@ -62,7 +74,7 @@ compile llvmModule outfile =
       (llvm, llvmHandle) <- mkstemps "output" ".ll"
       let runtime = "../src/runtime.c"
       withContext $ \context ->
-                      withModuleFromAST context llvmModule (writeLLVMAssemblyToFile (File llvm))
+            withModuleFromAST context llvmModule (writeLLVMAssemblyToFile (File llvm))
       hClose llvmHandle
       callProcess "clang" ["-Wno-override-module", "-lm", llvm, runtime, "-o", "../" <> outfile]
 
@@ -71,8 +83,8 @@ main = do
     opts <- execParser $
              info (options <**> helper)
                   (fullDesc <> header "danac - Dana compiler")
-    text <- TIO.readFile (file opts)
-    case parse (file opts) text of
+    text <- TIO.readFile (input opts)
+    case parse (input opts) text of
         Left err -> putStr $ errorBundlePretty err
         Right pt | dumpParser opts -> pPrint pt
                  | otherwise ->  
@@ -85,6 +97,10 @@ main = do
                                         Right c | dumpTypeChecker opts -> pPrint c
                                                 | otherwise -> do
                                                        let m = codegen (pack "test") c
-                                                       if dumpCodegen opts
-                                                           then pPrint m
-                                                       else compile m "a.out"
+                                                       if dumpCodegen opts then pPrint m
+                                                       else if dumpASM opts then do
+                                                            assembly <- withContext $ \context ->
+                                                                  withModuleFromAST context m moduleLLVMAssembly
+                                                            B.putStr assembly
+                                                       else
+                                                            compile m (output opts)
