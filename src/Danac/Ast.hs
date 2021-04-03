@@ -39,9 +39,9 @@ data DataType = Integ | Byte
     deriving (Eq, Show)
 data Type = DType DataType | AType Type Integer
     deriving (Eq, Show)
-data FancyType = Value Type | Ref DataType | Pointer Type
+data FparType = Value Type | Ref DataType | Pointer Type
     deriving (Eq, Show)
-data FunctionType = FunctionType (Maybe DataType) [FancyType]
+data FunctionType = FunctionType (Maybe DataType) [FparType]
     deriving (Eq, Show)
 
 data T r i where
@@ -51,7 +51,7 @@ data T r i where
 
     Header :: Text -> Maybe DataType -> [r FparDef] -> T r Header
 
-    FparDef :: Text -> FancyType -> T r FparDef
+    FparDef :: Text -> FparType -> T r FparDef
 
     LocalDefFuncDef :: r FuncDef -> T r LocalDef
     LocalDefFuncDecl :: r FuncDecl -> T r LocalDef

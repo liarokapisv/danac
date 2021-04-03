@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wall #-}
+
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecursiveDo #-}
@@ -13,9 +15,11 @@ import LLVM.IRBuilder.Instruction as I
 import LLVM.IRBuilder.Constant
 import qualified LLVM.AST as LLVM
 import qualified LLVM.AST.IntegerPredicate as IP
+import qualified LLVM.AST.Constant as C
 import LLVM.AST.IntegerPredicate 
 import LLVM.AST.Type (i8, i64, ptr, void)
 
+import qualified Danac.Renamer as RN
 import qualified Danac.TypeChecker as TC
 import Danac.Ast
 import Danac.Util.Annotation
@@ -33,7 +37,7 @@ import Data.Foldable (for_, foldrM)
 import Data.Traversable (for)
 import qualified Data.Map as Map
 import Control.Monad (unless, join)
-import Control.Monad.State.Strict (MonadState, runStateT, put, get, gets, modify)
+import Control.Monad.State (MonadState, evalState, put, get, gets, modify)
 import Control.Monad.Fix (MonadFix)
 
 dataType :: DataType -> LLVM.Type
@@ -48,11 +52,11 @@ ttype :: Type -> LLVM.Type
 ttype (DType dt) = dataType dt
 ttype (AType t i) = LLVM.ArrayType (fromInteger i) (ttype t)
 
-fancyType :: FancyType -> LLVM.Type
-fancyType (Pointer t) = ptr $ ttype t
-fancyType (Ref t) = ptr $ dataType t
-fancyType (Value t@(AType _ _)) = ptr $ ttype t
-fancyType (Value t@(DType _)) = ttype t
+fparType :: FparType -> LLVM.Type
+fparType (Pointer t) = ptr $ ttype t
+fparType (Ref t) = ptr $ dataType t
+fparType (Value t@(AType _ _)) = ptr $ ttype t
+fparType (Value t@(DType _)) = ttype t
 
 data Env = Env {
     functions :: Map.Map LLVM.Name LLVM.Operand,
@@ -60,22 +64,27 @@ data Env = Env {
     latestLabel :: Maybe (LLVM.Name, LLVM.Name)
 }
 
+emptyEnv :: Env
 emptyEnv = Env { functions = Map.empty, labels = Map.empty, latestLabel = Nothing }
 
 codegen :: Text -> Term (T :&&: TC.Ann) Ast -> LLVM.Module
-codegen name (Ast f :&&.: _) = buildModule (toShort $ encodeUtf8 name) $ flip runStateT emptyEnv $ do
+codegen name (Ast f :&&.: _) = flip evalState emptyEnv $ buildModuleT (toShort $ encodeUtf8 name) $ do
     writeString <- extern (LLVM.Name "puts") [ptr i8] void
     modify $ \s -> s { functions = Map.insert (LLVM.Name "writeString") writeString $ functions s }
     writeChar <- extern (LLVM.Name "putchar") [i8] void
     modify $ \s -> s { functions = Map.insert (LLVM.Name "writeChar") writeChar $ functions s }
     strlen <- extern (LLVM.Name "strlen") [ptr i8] i64
     modify $ \s -> s { functions = Map.insert (LLVM.Name "strlen") strlen $ functions s }
+    writeInteger <- extern (LLVM.Name "writeInteger") [i64] void
+    modify $ \s -> s { functions = Map.insert (LLVM.Name "writeInteger") writeInteger $ functions s }
+    readInteger <- extern (LLVM.Name "readInteger") [] i64
+    modify $ \s -> s { functions = Map.insert (LLVM.Name "readInteger") readInteger $ functions s }
     codegenFuncDef Nothing f
 
-createFrame :: Maybe LLVM.Type -> Term (T :&&: TC.Ann) FuncDef -> LLVM.Type
+createFrame :: Maybe LLVM.Type -> Term (T :&&: TC.Ann) i -> LLVM.Type
 createFrame mparent y = LLVM.StructureType False (maybeToList (fmap ptr mparent) ++ unK (cata collectAlg y))
     where collectAlg :: Alg (T :&&: TC.Ann) (K [LLVM.Type])
-          collectAlg (FparDef _ t :&&: _) = K [fancyType t]
+          collectAlg (FparDef _ t :&&: _) = K [fparType t]
           collectAlg (VarDef _ t :&&: _) = K [ttype t]
           collectAlg (LocalDefFuncDecl _ :&&: _) = K []
           collectAlg (LocalDefFuncDef _ :&&: _) = K []
@@ -85,7 +94,7 @@ lookupFunction :: MonadState Env m => LLVM.Name -> m LLVM.Operand
 lookupFunction t = do
     mop <- gets $ Map.lookup t . functions
     case mop of
-        Nothing -> error "Internal compiler error on lookupFunction - Most likely unimplemented stdlib function"
+        Nothing -> error $ "Internal compiler error when looking up for function " ++ show t ++ " - most likely unimplemented stdlib function"
         Just o -> pure o
 
 lookupLabel :: MonadState Env m => Text -> m (LLVM.Name, LLVM.Name)
@@ -106,11 +115,20 @@ codegenFuncDef :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => Maybe 
 codegenFuncDef mparent f@(FuncDef header localDefs body :&&.: _) = mdo
     let (name, paramTypes, retType) = codegenHeader mparent header
     let frameType = createFrame mparent f
-    op <- function name paramTypes retType $ \params -> mdo
-        modify $ (\s -> s { functions = Map.insert name op $ functions s })
-        block
-        for_ localDefs $ codegenLocalDef frameType
-        codegenBody frameType body params
+    let op = LLVM.ConstantOperand $ C.GlobalReference (ptr $ LLVM.FunctionType retType (fst <$> paramTypes) False) name
+    modify $ (\s -> s { functions = Map.insert name op $ functions s })
+    locally $ do
+        _ <- function name paramTypes retType $ \params -> do
+            for_ localDefs $ codegenLocalDef frameType
+            codegenBody frameType body params
+        pure ()
+
+
+codegenFuncDecl :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => Maybe LLVM.Type -> Term (T :&&: TC.Ann) FuncDecl -> m ()
+codegenFuncDecl mparent (FuncDecl header :&&.: _) = mdo
+    let (name, paramTypes, retType) = codegenHeader mparent header
+    op <- extern name (fmap fst paramTypes) retType
+    modify $ (\s -> s { functions = Map.insert name op $ functions s })
     pure ()
 
 codegenHeader :: Maybe LLVM.Type -> Term (T :&&: TC.Ann) Header -> (LLVM.Name, [(LLVM.Type, ParameterName)], LLVM.Type)
@@ -120,10 +138,11 @@ codegenHeader mparent (Header name mdt fparDefs :&&.: _) =
      maybeDataType mdt)
 
 codegenFparDef :: Term (T :&&: TC.Ann) FparDef -> (LLVM.Type, ParameterName)
-codegenFparDef (FparDef name ftp :&&.: _) = (fancyType ftp, ParameterName $ toShort $ encodeUtf8 name)
+codegenFparDef (FparDef name ftp :&&.: _) = (fparType ftp, ParameterName $ toShort $ encodeUtf8 name)
 
 codegenLocalDef :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => LLVM.Type -> Term (T :&&: TC.Ann) LocalDef -> m ()
 codegenLocalDef parent (LocalDefFuncDef fd :&&.: _) = codegenFuncDef (Just parent) fd
+codegenLocalDef parent (LocalDefFuncDecl fd :&&.: _) = codegenFuncDecl (Just parent) fd  
 codegenLocalDef _ _ = pure ()
 
 codegenBody :: (MonadState Env m, MonadFix m, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Type -> Term (T :&&: TC.Ann) Block -> [LLVM.Operand] -> m ()
@@ -139,28 +158,29 @@ codegenBlock :: (MonadState Env m, MonadFix m, MonadModuleBuilder m, MonadIRBuil
 codegenBlock frame (Block stmts :&&.: _) = do
     for_ stmts $ codegenStmt frame
 
-getFrame :: (Integral i, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> i -> m LLVM.Operand
+getFrame :: (Show i, Integral i, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> i -> m LLVM.Operand
 getFrame frame 0 = pure frame
 getFrame frame n = do
     p <- gep frame [int32 0, int32 0]
     f <- load p 0
     getFrame f (n-1)
 
-getFrameElement :: (Integral i, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> i -> i -> m LLVM.Operand
+getFrameElement :: (Show i, Integral i, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> i -> i -> m LLVM.Operand
 getFrameElement frame n offset = do
     f <- getFrame frame n
     gep f [int32 0 , int32 $ toInteger offset]
 
 codegenVarId :: (MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) VarIdentifier -> m LLVM.Operand
-codegenVarId frame (VarIdentifier _ :&&.: TC.AnnVariable _ f links offset ft _) = do
+codegenVarId frame (VarIdentifier _ :&&.: TC.AnnVariable _ f links offset vt) = do
     p <- getFrameElement frame links (offset + (hasParent f :: Int))
-    case ft of
-        Value (AType t _) -> do 
-            p' <- gep p [int32 0, int32 0]
-            bitcast p' (ptr $ ttype t)
-        Value (DType _) -> pure p
-        Ref _ -> load p 0
-        Pointer _ -> load p 0
+    case vt of
+        RN.Param (Value (DType _)) -> pure p
+        RN.Param (Value (AType t _)) -> do
+               p' <- load p 0
+               bitcast p' (ptr $ ttype t)
+        RN.Param _ -> load p 0
+        RN.Local (AType t _) -> bitcast p (ptr $ ttype t)
+        RN.Local (DType _) -> pure p
         where hasParent t = if Data.Text.any (=='.') t then 1 else 0
 
 codegenLvalue :: (MonadState Env m, MonadIRBuilder m, MonadModuleBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Lvalue -> m LLVM.Operand
@@ -182,12 +202,12 @@ codegenExprWithTag frame x@(ExprLvalue _ :&&.: _) = codegenExpr frame x >>= pure
 codegenExprWithTag frame x = codegenExpr frame x >>= pure . (Temporary,)
 
 codegenFuncCall :: (MonadState Env m, MonadIRBuilder m, MonadModuleBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) FuncCall -> m LLVM.Operand
-codegenFuncCall frame (FuncCall (FuncIdentifier text :&&.: TC.AnnFunction _ _ mlinks (FunctionType _ fts)) es :&&.: _) = do
+codegenFuncCall frame (FuncCall (FuncIdentifier text :&&.: TC.AnnFunction _ mlinks (FunctionType _ fts)) es :&&.: _) = do
     f <- lookupFunction $ LLVM.Name $ toShort $ encodeUtf8 text
     es' <- for es $ codegenExprWithTag frame
     es'' <- for (zip fts es') $ \(ft, (tag, e)) -> 
                                     case (ft, tag) of
-                                        (Value (AType _ _), GlobalString) -> bitcast e $ fancyType ft
+                                        (Value (AType _ _), GlobalString) -> bitcast e $ fparType ft
                                         (Pointer _, GlobalString) -> pure e
                                         (Value _, InFrame) -> load e 0
                                         (Ref _, InFrame) -> pure e
@@ -266,7 +286,7 @@ codegenStmt frame (StmtAssign l e :&&.: _) = do
 codegenStmt frame (StmtProcCall c :&&.: _) = codegenFuncCall frame c *> pure ()
 codegenStmt frame (StmtReturn e :&&.: _) = join $ ret <$> codegenExprLoad frame e
 codegenStmt frame (StmtIf i ei me :&&.: _) = mdo
-    codegenCondStmt frame "if" exit elifs i
+    _ <- codegenCondStmt frame "if" exit elifs i
     elifs <- foldrM (\ic next -> codegenCondStmt frame "elif" exit next ic) elseB ei
     elseB <- case me of
                 Nothing -> pure exit
@@ -304,3 +324,10 @@ mkTerminator :: MonadIRBuilder m => m () -> m ()
 mkTerminator instr = do
     check <- hasTerminator
     unless check instr
+
+locally :: MonadState s m => m a -> m a
+locally computation = do
+  oldState <- get
+  result   <- computation
+  put oldState
+  return result

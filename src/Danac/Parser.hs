@@ -107,7 +107,7 @@ stype = do
     is <- many (brackets int)
     pure $ Prelude.foldl AType (DType d) is
     
-fancyType :: Parser FancyType
+fancyType :: Parser FparType
 fancyType = 
     try (do symbol "ref" 
             t <- dataType 

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4b3abdfba693b479ca6967ff223aee3c8d324a18da1afb97fb917646f77f1374
+-- hash: 91da157bfbb29558d2f3f50fa047f28f703e0589d040b559ee94e91a8c2b7887
 
 name:           danac
 version:        0.0.0
@@ -16,6 +16,7 @@ library
       Danac.Util.Annotation
       Danac.Util.SourceSpan
       Danac.Util.Derive
+      Danac.Util.Helpers
       Danac.Parser
       Danac.Renamer
       Danac.TypeChecker
@@ -53,6 +54,7 @@ executable danac-exe
     , llvm-hs
     , megaparsec
     , mtl
+    , optparse-applicative
     , pretty-simple
     , text
     , validation

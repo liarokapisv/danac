@@ -10,6 +10,7 @@ library:
   - Danac.Util.Annotation
   - Danac.Util.SourceSpan
   - Danac.Util.Derive
+  - Danac.Util.Helpers
   - Danac.Parser
   - Danac.Renamer
   - Danac.TypeChecker
@@ -44,3 +45,4 @@ executables:
     - compdata
     - bytestring
     - llvm-hs
+    - optparse-applicative

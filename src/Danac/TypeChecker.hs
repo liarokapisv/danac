@@ -24,13 +24,19 @@ data LvalueType = LType Type | LPointer Type
 data ValueType = RValue DataType | LValue LvalueType
     deriving (Eq, Show)
 
-toLvalueType :: FancyType -> LvalueType
-toLvalueType (Pointer x) = LPointer x
-toLvalueType (Value x) = LType x
-toLvalueType (Ref x) = LType (DType x)
+
+toLvalueType :: RN.VarType -> LvalueType
+toLvalueType (RN.Param t) = parToLvalue t
+toLvalueType (RN.Local t) = LType t
+
+parToLvalue :: FparType -> LvalueType
+parToLvalue (Pointer x) = LPointer x
+parToLvalue (Value x) = LType x
+parToLvalue (Ref x) = LType (DType x)
+
 
 data Eval i where
-    EvalVariable :: SourceSpan -> LvalueType -> Eval VarIdentifier
+    EvalVariable :: SourceSpan -> RN.VarType -> Eval VarIdentifier
     EvalHeader :: SourceSpan -> Maybe DataType -> Eval Header
     EvalFunction :: Text -> FunctionType -> Eval FuncIdentifier
     EvalLvalue :: SourceSpan -> LvalueType -> Eval Lvalue
@@ -86,7 +92,7 @@ data Error = LvalueAxLhsWrongType SourceSpan LvalueType
            | ExprIncompatibleTypes SourceSpan (SourceSpan, ValueType) (SourceSpan, ValueType)
            | ExprProcedureCallNotAllowed SourceSpan Text
            | FuncCallWrongNumberOfParameters SourceSpan Text FunctionType Integer
-           | FuncCallIncompatibleArg SourceSpan (Integer, FancyType) (SourceSpan, ValueType)
+           | FuncCallIncompatibleArg SourceSpan (Integer, FparType) (SourceSpan, ValueType)
            | ReturnPointerType SourceSpan Type
            | ReturnArrayType SourceSpan Type Integer
            | PointerOnAssignLhs SourceSpan
@@ -106,10 +112,10 @@ typecheckAlg :: Alg (T :&&: RN.Ann) TC
 typecheckAlg (w :&&: ann) = 
     case view w of
         VariableView _ -> case ann of
-                            RN.AnnVariable s (_,_,_, t) -> F $ Success $ EvalVariable s $ toLvalueType t
+                            RN.AnnVariable s (_,_,_, t) -> F $ Success $ EvalVariable s t
         FunctionView (FuncIdentifier n) -> case ann of
                             RN.AnnFunction _ (_,t) -> F $ Success $ EvalFunction n t
-        LvalueView (LvalueId (F t)) -> F $ fmap (\(EvalVariable s x) -> EvalLvalue s x) t
+        LvalueView (LvalueId (F t)) -> F $ fmap (\(EvalVariable s x) -> EvalLvalue s $ toLvalueType x) t
         LvalueView (LvalueStr t) -> let RN.NoAnn s _ = ann in F $ Success $ EvalLvalue s $ LType $ AType (DType Byte) (toInteger (Data.Text.length t) + 1)
         LvalueView (LvalueAx (F l) (F i)) -> F $ bindValidation (go <$> l <*> i) id
             where go :: Eval Lvalue -> Eval Expr -> Validated (Eval Lvalue)
@@ -234,16 +240,16 @@ typecheckAlg (w :&&: ann) =
               validStmts s _ = Left $ InconsistentReturnTypes s
 
 data Ann i where
-    AnnVariable :: SourceSpan -> Text -> Int -> Int -> FancyType -> LvalueType -> Ann VarIdentifier
-    AnnHeader :: SourceSpan -> Maybe DataType -> Ann Header
-    AnnFunction :: SourceSpan -> Text -> Maybe Int -> FunctionType -> Ann FuncIdentifier
-    AnnLvalue :: SourceSpan -> LvalueType -> Ann Lvalue
-    AnnExpr :: SourceSpan -> ValueType -> Ann Expr
-    AnnFuncCall :: SourceSpan -> Text -> Maybe DataType -> Ann FuncCall
+    AnnVariable :: SourceSpan -> Text -> Int -> Int -> RN.VarType -> Ann VarIdentifier
+    AnnFunction :: SourceSpan -> Maybe Int -> FunctionType -> Ann FuncIdentifier
+    AnnExpr :: SourceSpan -> Maybe DataType -> Ann Expr
     NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
 
 data NoAnnGroup i where
     NoAnnAst :: NoAnnGroup Ast
+    NoAnnHeader :: NoAnnGroup Header
+    NoAnnLvalue :: NoAnnGroup Lvalue
+    NoAnnFuncCall :: NoAnnGroup FuncCall
     NoAnnFuncDef :: NoAnnGroup FuncDef
     NoAnnFparDef :: NoAnnGroup FparDef
     NoAnnLocalDef :: NoAnnGroup LocalDef
@@ -257,13 +263,18 @@ data NoAnnGroup i where
 deriving instance (Show (Ann i))
 deriving instance (Show (NoAnnGroup i))
 
+extractDataType :: ValueType -> Maybe DataType
+extractDataType (RValue t) = Just t
+extractDataType (LValue (LType (DType t))) = Just t
+extractDataType _ = Nothing
+
 mergeAnns :: RN.Ann i -> Eval i -> Ann i
-mergeAnns (RN.AnnVariable s (x, y, z, t)) (EvalVariable _ l) = AnnVariable s x y z t l
-mergeAnns (RN.AnnFunction s (x, _)) (EvalFunction t y) = AnnFunction s t x y
-mergeAnns (RN.NoAnn s RN.NoAnnHeader) (EvalHeader _ t) = AnnHeader s t
-mergeAnns (RN.NoAnn s RN.NoAnnLvalue) (EvalLvalue _ t) = AnnLvalue s t
-mergeAnns (RN.NoAnn s RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr s t
-mergeAnns (RN.NoAnn s RN.NoAnnFuncCall) (EvalFuncCall _ n t) = AnnFuncCall s n t
+mergeAnns (RN.AnnVariable s (x, y, z, t)) (EvalVariable _ _) = AnnVariable s x y z t
+mergeAnns (RN.AnnFunction s (x, _)) (EvalFunction _ y) = AnnFunction s x y
+mergeAnns (RN.NoAnn s RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr s $ extractDataType t
+mergeAnns (RN.NoAnn s RN.NoAnnHeader) (EvalHeader _ _) = NoAnn s NoAnnHeader
+mergeAnns (RN.NoAnn s RN.NoAnnLvalue) (EvalLvalue _ _) = NoAnn s NoAnnLvalue
+mergeAnns (RN.NoAnn s RN.NoAnnFuncCall) (EvalFuncCall _ _ _) = NoAnn s NoAnnFuncCall
 mergeAnns (RN.NoAnn s _) (NoEval NoEvalAst) = NoAnn s NoAnnAst
 mergeAnns (RN.NoAnn s _) (NoEval NoEvalFuncDef) = NoAnn s NoAnnFuncDef
 mergeAnns (RN.NoAnn s _) (NoEval NoEvalFparDef) = NoAnn s NoAnnFparDef

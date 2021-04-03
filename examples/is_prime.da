@@ -12,7 +12,6 @@ def main
                 elif n % i = 0: return: false
                 i := i + 2
             return: true
-
     var limit number counter is int
 
     writeString: "Limit: "

@@ -12,9 +12,8 @@ def main
             move: source, target
             hanoi: rings-1, auxiliary, target, source
         
-        var numberOfRings is int
+    var numberOfRings is int
         
-        writeString: "Rings: "
-        numberOfRings := readInteger()
-        hanoi: numberOfRings, "left", "right", "middle"
-        
+    writeString: "Rings: "
+    numberOfRings := readInteger()
+    hanoi: numberOfRings, "left", "right", "middle"
