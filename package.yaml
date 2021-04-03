@@ -45,4 +45,8 @@ executables:
     - compdata
     - bytestring
     - llvm-hs
+    - llvm-hs-pure
     - optparse-applicative
+    - directory
+    - process
+    - unix

@@ -10,7 +10,7 @@ def main
                 r[i] := s[l-i-1]
                 i := i+1
             else: break
-        r[i] := 1 // '\0'
+        r[i] := '\0'
 
     reverse: "\n!dlrow olleH"
     writeString: r

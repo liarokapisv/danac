@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 91da157bfbb29558d2f3f50fa047f28f703e0589d040b559ee94e91a8c2b7887
+-- hash: dd851ef41df0978cf760c423d91900415a96a0a1313c36708d6ac64ec656868f
 
 name:           danac
 version:        0.0.0
@@ -51,11 +51,15 @@ executable danac-exe
     , bytestring
     , compdata
     , danac
+    , directory
     , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , optparse-applicative
     , pretty-simple
+    , process
     , text
+    , unix
     , validation
   default-language: Haskell2010

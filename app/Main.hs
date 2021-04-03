@@ -15,9 +15,16 @@ import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Pretty.Simple (pPrint)
 import LLVM.Module
 import LLVM.Context
-import qualified Data.ByteString.Char8 as B
+import LLVM.AST
 import Options.Applicative
 import Data.Foldable (traverse_)
+import qualified Data.ByteString.Char8()
+
+import System.IO
+import System.Directory
+import System.Process
+import System.Posix.Temp
+import Control.Exception (bracket)
 
 data Options = Options {
     file :: String,
@@ -48,6 +55,17 @@ options = Options <$> argument str
                         <> short 'c'
                         <> help "Dumps post-codegen tree")
 
+compile :: LLVM.AST.Module -> FilePath -> IO ()
+compile llvmModule outfile =
+  bracket (mkdtemp "build") removePathForcibly $ \buildDir ->
+    withCurrentDirectory buildDir $ do
+      (llvm, llvmHandle) <- mkstemps "output" ".ll"
+      let runtime = "../src/runtime.c"
+      withContext $ \context ->
+                      withModuleFromAST context llvmModule (writeLLVMAssemblyToFile (File llvm))
+      hClose llvmHandle
+      callProcess "clang" ["-Wno-override-module", "-lm", llvm, runtime, "-o", "../" <> outfile]
+
 main :: IO ()
 main = do
     opts <- execParser $
@@ -68,8 +86,5 @@ main = do
                                                 | otherwise -> do
                                                        let m = codegen (pack "test") c
                                                        if dumpCodegen opts
-                                                           then pPrint m 
-                                                       else do
-                                                           assembly <- withContext $ \context ->
-                                                                           withModuleFromAST context m moduleLLVMAssembly
-                                                           B.putStr assembly
+                                                           then pPrint m
+                                                       else compile m "a.out"
