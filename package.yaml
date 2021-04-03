@@ -28,7 +28,7 @@ library:
   - bytestring
 
 executables:
-  danac-exe:
+  danac:
     main:                Main.hs
     source-dirs:         app
     ghc-options:

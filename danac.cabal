@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: dd851ef41df0978cf760c423d91900415a96a0a1313c36708d6ac64ec656868f
+-- hash: 2660d8e95a76455879f179c0623d9fae0d2d4f01a7bb9c79d59871889a72f1eb
 
 name:           danac
 version:        0.0.0
@@ -39,7 +39,7 @@ library
     , validation
   default-language: Haskell2010
 
-executable danac-exe
+executable danac
   main-is: Main.hs
   other-modules:
       Paths_danac
