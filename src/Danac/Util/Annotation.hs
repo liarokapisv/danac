@@ -4,6 +4,8 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Danac.Util.Annotation where
 
@@ -15,6 +17,7 @@ import Data.Comp.Multi.Show
 import Data.Comp.Multi.Term
 import Control.Monad (liftM)
 import Data.Comp.Multi.Ops (fsnd, (:*:)(..))
+import Data.Functor
 
 data (f :&: a) (g ::  * -> *) e = !(f g e) :&: !a
 pattern x :&.: y = Term (x :&: y)
@@ -106,14 +109,15 @@ regress = cata go
 
 newtype F f (a :: * -> *) i = F { unF :: f (a i) }
 
-extendAlg :: (Applicative f, HTraversable t) => Alg (t :&&: a) (F f e) -> Alg (t :&&: a) (F f (Term (t :&&: (a :*: e))))
-extendAlg f (x :&&: ann) = let eval = unF $ f (hfmap (F . fmap (fsnd . getTAnnI) . unF) x :&&: ann)
-                               ann' = fmap (ann :*:) $ eval
-                               lhs = htraverse unF x
-                            in F $ (:&&.:) <$> lhs <*> ann'
+extendAlg :: forall f t a e . (Applicative f, HTraversable t) => (forall k l . f k -> (k -> f l) -> f l) -> Alg (t :&&: a) (F f e) -> Alg (t :&&: a) (F f (Term (t :&&: (a :*: e))))
+extendAlg bindF alg (x :&&: ann) = let lhs = htraverse unF x
+                                    in F $ bindF lhs $ \lhs' -> getEval ann lhs' <&> \e -> 
+                                            lhs' :&&.: (ann :*: e)
+    where getEval :: a i -> t (Term (t :&&: (a :*: e))) i -> f (e i)
+          getEval a =  unF . alg . (:&&: a) . hfmap (F . (pure @ f) . fsnd . getTAnnI)
 
-extend :: (Applicative f, HTraversable t) => Alg (t :&&: a) (F f e) -> Term (t :&&: a) i -> F f (Term (t :&&: (a :*: e))) i
-extend f = cata (extendAlg f)
+extend :: (Applicative f, HTraversable t) => (forall k l. f k -> (k -> f l) -> f l) -> Alg (t :&&: a) (F f e) -> Term (t :&&: a) i -> F f (Term (t :&&: (a :*: e))) i
+extend b f = cata (extendAlg b f)
 
 combineAlg :: (forall i . a i -> b i -> c i) -> Alg (t :&&: (a :*: b)) (Term (t :&&: c))
 combineAlg f (x :&&: (y :*: z)) = x :&&.: f y z

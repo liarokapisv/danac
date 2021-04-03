@@ -300,6 +300,6 @@ mergeAnns (RN.NoAnn s _) (EvalStmt _) = NoAnn s NoAnnStmt
 mergeAnns (RN.NoAnn s _) (EvalBlock _ _) = NoAnn s NoAnnBlock
 
 typecheck :: Term (T :&&: RN.Ann) i -> Either [Error] (Term (T :&&: Ann) i)
-typecheck x = case (unF $ extend typecheckAlg x) of
+typecheck x = case (unF $ extend bindValidation typecheckAlg x) of
                 Failure errs -> Left errs
                 Success t -> Right $ combine mergeAnns t

@@ -18,6 +18,7 @@ import LLVM.Module
 import LLVM.Context
 import qualified Data.ByteString.Char8 as B
 import Options.Applicative
+import Data.Foldable (traverse_)
 
 data Options = Options {
     file :: String,
@@ -60,17 +61,17 @@ main = do
         Right pt | dumpParser opts -> pPrint pt
                  | otherwise ->  
                     case rename pt of
-                        Left errors -> pPrint errors
+                        Left errors -> traverse_ print errors
                         Right t | dumpRenamer opts -> pPrint t
                                 | otherwise -> 
                                     case typecheck t of
-                                        Left errs -> pPrint errs
+                                        Left errs -> traverse_ print errs
                                         Right c | dumpTypeChecker opts -> pPrint c
                                                 | otherwise -> do
-                                                        let m = codegen (pack "test") c
-                                                        if dumpCodegen opts
-                                                            then pPrint m 
-                                                        else do
-                                                            assembly <- withContext $ \context ->
-                                                                            withModuleFromAST context m moduleLLVMAssembly
-                                                            B.putStr assembly
+                                                       let m = codegen (pack "test") c
+                                                       if dumpCodegen opts
+                                                           then pPrint m 
+                                                       else do
+                                                           assembly <- withContext $ \context ->
+                                                                           withModuleFromAST context m moduleLLVMAssembly
+                                                           B.putStr assembly

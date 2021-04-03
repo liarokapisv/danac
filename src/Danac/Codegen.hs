@@ -33,7 +33,7 @@ import Data.Comp.Multi.Term
 import Data.Comp.Multi.Algebra
 
 import Data.Maybe (maybeToList)
-import Data.Foldable (for_, foldrM)
+import Data.Foldable (for_)
 import Data.Traversable (for)
 import qualified Data.Map as Map
 import Control.Monad (unless, join)
