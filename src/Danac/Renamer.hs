@@ -10,6 +10,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 
 
 module Danac.Renamer where
@@ -28,6 +29,7 @@ import Data.Comp.Multi.HTraversable (htraverse)
 import Data.Functor.Compose
 import Data.List (find, intersperse)
 import Data.Maybe (isJust)
+import GHC.Show (appPrec, appPrec1)
 
 data Error = UndefinedVariable Text SourceSpan
            | UndefinedFunction Text SourceSpan
@@ -67,7 +69,7 @@ lookVariable :: Text -> Context -> Maybe (Text, Int, Int, VarType)
 lookVariable t c = go 0 (frames c)
     where go _ [] = Nothing
           go n (Frame {functionName = name, variables = vs} : fs) = 
-                case find ((==t).fst.snd) (zip [0..] (reverse vs)) of
+                case find ((==t).fst.snd) (zip [0..] vs) of
                         Just (i,(_,typ)) -> Just (withNamespace name (fmap functionName fs), n, i, typ)
                         Nothing -> go (n+1) fs
 
@@ -106,7 +108,7 @@ extractName :: Term (T :&: SourceSpan) Header -> Text
 extractName (Header t _ _ :&.: _) = t
                 
 collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, FunctionType, [(Text, VarType)])
-collectHeaderVarNames h@(Header name _ fdefs :&.: _) = fmap (\s -> (name, headerToType h, reverse s)) $ go [] fdefs
+collectHeaderVarNames h@(Header name _ fdefs :&.: _) = fmap (name, headerToType h,) $ go [] fdefs
     where go :: [(Text, VarType)] -> [Term (T :&: SourceSpan) FparDef] -> Either Error [(Text, VarType)]
           go ns [] = Right ns
           go ns (FparDef n' t :&.: s : fs) = 
@@ -131,7 +133,7 @@ createFrame :: Term (T :&: SourceSpan) Header -> [Term (T :&: SourceSpan) LocalD
 createFrame header ldefs = do
     (name, typ, vars1) <- collectHeaderVarNames header
     (vars2, fns) <- collectLocalNames (vars1,[]) ldefs
-    pure $ (name, Frame { functionName = name, functionType = typ, variables = vars2, functions = fns })
+    pure $ (name, Frame { functionName = name, functionType = typ, variables = reverse vars2, functions = reverse fns })
 
 
 data NoAnnGroup i where
@@ -150,14 +152,15 @@ data NoAnnGroup i where
     NoAnnExpr :: NoAnnGroup Expr
     NoAnnCond :: NoAnnGroup Cond
 
-deriving instance (Show (NoAnnGroup i))
-
 data Ann i where
     AnnVariable :: SourceSpan -> (Text, Int, Int, VarType) -> Ann VarIdentifier
     AnnFunction :: SourceSpan -> (Maybe Int, FunctionType) -> Ann FuncIdentifier
     NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
 
-deriving instance (Show (Ann i))
+instance Show (Ann i) where
+    showsPrec p (AnnVariable x y) = showParen (p > appPrec) $ showString "AnnVariable " . showsPrec appPrec1 x . showsPrec appPrec1 y
+    showsPrec p (AnnFunction x y) = showParen (p > appPrec) $ showString "AnnFunction " . showsPrec appPrec1 x . showsPrec appPrec1 y
+    showsPrec _ _ = showString ""
 
 data View r i where
     VariableView :: T r VarIdentifier -> View r VarIdentifier

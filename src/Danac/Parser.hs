@@ -32,8 +32,8 @@ symbol = L.symbol space
 
 parens = try . between (symbol "(") (symbol ")") 
 brackets = try . between (symbol "[") (symbol "]")
-dquotes = try . between (symbol "\"") (symbol "\"")
-quotes = try . between (symbol "'") (symbol "'")
+dquotes = try . between (C.string "\"") (symbol "\"")
+quotes = try . between (C.string "'") (symbol "'")
 
 lineFeed = C.string "\\n" *> pure '\n'
 tab = C.string "\\t" *> pure '\t'

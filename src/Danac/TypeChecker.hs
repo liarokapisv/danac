@@ -18,12 +18,12 @@ import Danac.Util.SourceSpan
 import qualified Danac.Renamer as RN
 import Data.Text (Text, length)
 import Data.Maybe (maybeToList, catMaybes)
+import GHC.Show (appPrec, appPrec1)
 
 data LvalueType = LType Type | LPointer Type
     deriving (Eq, Show)
 data ValueType = RValue DataType | LValue LvalueType
     deriving (Eq, Show)
-
 
 toLvalueType :: RN.VarType -> LvalueType
 toLvalueType (RN.Param t) = parToLvalue t
@@ -239,12 +239,6 @@ typecheckAlg (w :&&: ann) =
               validStmts _ (t : xs) | all (==t) xs = Right $ Just t
               validStmts s _ = Left $ InconsistentReturnTypes s
 
-data Ann i where
-    AnnVariable :: SourceSpan -> Text -> Int -> Int -> RN.VarType -> Ann VarIdentifier
-    AnnFunction :: SourceSpan -> Maybe Int -> FunctionType -> Ann FuncIdentifier
-    AnnExpr :: SourceSpan -> Maybe DataType -> Ann Expr
-    NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
-
 data NoAnnGroup i where
     NoAnnAst :: NoAnnGroup Ast
     NoAnnHeader :: NoAnnGroup Header
@@ -260,8 +254,27 @@ data NoAnnGroup i where
     NoAnnStmt :: NoAnnGroup Stmt
     NoAnnBlock :: NoAnnGroup Block
 
-deriving instance (Show (Ann i))
-deriving instance (Show (NoAnnGroup i))
+data Ann i where
+    AnnVariable :: SourceSpan -> Text -> Int -> Int -> RN.VarType -> Ann VarIdentifier
+    AnnFunction :: SourceSpan -> Maybe Int -> FunctionType -> Ann FuncIdentifier
+    AnnExpr :: SourceSpan -> Maybe DataType -> Ann Expr
+    NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
+
+instance Show (Ann i) where
+    showsPrec p (AnnVariable a b c d e) = showParen (p > appPrec) $ 
+                                              showString "AnnVariable " .  showsPrec appPrec1 a . 
+                                              showString " " .  showsPrec appPrec1 b . 
+                                              showString " " .  showsPrec appPrec1 c . 
+                                              showString " " .  showsPrec appPrec1 d .
+                                              showString " " .  showsPrec appPrec1 e
+    showsPrec p (AnnFunction a b c ) = showParen (p > appPrec) $
+                                           showString "AnnFunction " .  showsPrec appPrec1 a .
+                                           showString " " .  showsPrec appPrec1 b .
+                                           showString " " .  showsPrec appPrec1 c
+    showsPrec p (AnnExpr a b) = showParen (p > appPrec) $ 
+                                    showString "AnnFunction " .  showsPrec appPrec1 a .
+                                    showString " " .  showsPrec appPrec1 b
+    showsPrec _ _ = showString ""
 
 extractDataType :: ValueType -> Maybe DataType
 extractDataType (RValue t) = Just t

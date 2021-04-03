@@ -62,22 +62,22 @@ data Env = Env {
     functions :: Map.Map LLVM.Name LLVM.Operand,
     labels :: Map.Map Text (LLVM.Name, LLVM.Name),
     latestLabel :: Maybe (LLVM.Name, LLVM.Name)
-}
+} deriving Show
 
 emptyEnv :: Env
 emptyEnv = Env { functions = Map.empty, labels = Map.empty, latestLabel = Nothing }
 
 codegen :: Text -> Term (T :&&: TC.Ann) Ast -> LLVM.Module
 codegen name (Ast f :&&.: _) = flip evalState emptyEnv $ buildModuleT (toShort $ encodeUtf8 name) $ do
-    writeString <- extern (LLVM.Name "puts") [ptr i8] void
+    writeString <- extern (LLVM.Name "__writeString") [ptr i8] void
     modify $ \s -> s { functions = Map.insert (LLVM.Name "writeString") writeString $ functions s }
-    writeChar <- extern (LLVM.Name "putchar") [i8] void
+    writeChar <- extern (LLVM.Name "__writeChar") [i8] void
     modify $ \s -> s { functions = Map.insert (LLVM.Name "writeChar") writeChar $ functions s }
-    strlen <- extern (LLVM.Name "strlen") [ptr i8] i64
+    strlen <- extern (LLVM.Name "__strlen") [ptr i8] i64
     modify $ \s -> s { functions = Map.insert (LLVM.Name "strlen") strlen $ functions s }
-    writeInteger <- extern (LLVM.Name "writeInteger") [i64] void
+    writeInteger <- extern (LLVM.Name "__writeInteger") [i64] void
     modify $ \s -> s { functions = Map.insert (LLVM.Name "writeInteger") writeInteger $ functions s }
-    readInteger <- extern (LLVM.Name "readInteger") [] i64
+    readInteger <- extern (LLVM.Name "__readInteger") [] i64
     modify $ \s -> s { functions = Map.insert (LLVM.Name "readInteger") readInteger $ functions s }
     codegenFuncDef Nothing f
 
@@ -112,16 +112,17 @@ lookupLatestLabel = do
         Just o -> pure o
 
 codegenFuncDef :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => Maybe LLVM.Type -> Term (T :&&: TC.Ann) FuncDef -> m ()
-codegenFuncDef mparent f@(FuncDef header localDefs body :&&.: _) = mdo
+codegenFuncDef mparent f@(FuncDef header@(Header _ rt _ :&&.: _) localDefs body :&&.: _) = mdo
     let (name, paramTypes, retType) = codegenHeader mparent header
     let frameType = createFrame mparent f
     let op = LLVM.ConstantOperand $ C.GlobalReference (ptr $ LLVM.FunctionType retType (fst <$> paramTypes) False) name
     modify $ (\s -> s { functions = Map.insert name op $ functions s })
-    locally $ do
-        _ <- function name paramTypes retType $ \params -> do
-            for_ localDefs $ codegenLocalDef frameType
-            codegenBody frameType body params
-        pure ()
+    _ <- function name paramTypes retType $ \params -> do
+        _entry <- block `named` "entry"
+        for_ localDefs $ codegenLocalDef frameType
+        codegenBody frameType body params
+        ensureRet rt
+    pure ()
 
 
 codegenFuncDecl :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => Maybe LLVM.Type -> Term (T :&&: TC.Ann) FuncDecl -> m ()
@@ -186,7 +187,7 @@ codegenVarId frame (VarIdentifier _ :&&.: TC.AnnVariable _ f links offset vt) = 
 codegenLvalue :: (MonadState Env m, MonadIRBuilder m, MonadModuleBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Lvalue -> m LLVM.Operand
 codegenLvalue frame (LvalueId x :&&.: _) = codegenVarId frame x
 codegenLvalue _ (LvalueStr x :&&.: _) = do 
-    name <- fresh
+    name <- freshName  $ toShort $ encodeUtf8 x
     c <- globalStringPtr (unpack x) name
     pure $ LLVM.ConstantOperand c
 codegenLvalue frame (LvalueAx l e :&&.: _) = do
@@ -207,8 +208,8 @@ codegenFuncCall frame (FuncCall (FuncIdentifier text :&&.: TC.AnnFunction _ mlin
     es' <- for es $ codegenExprWithTag frame
     es'' <- for (zip fts es') $ \(ft, (tag, e)) -> 
                                     case (ft, tag) of
-                                        (Value (AType _ _), GlobalString) -> bitcast e $ fparType ft
-                                        (Pointer _, GlobalString) -> pure e
+                                        (Value (AType _ _), GlobalString) -> pure e
+                                        (Pointer _, GlobalString) -> bitcast e (ptr i8)
                                         (Value _, InFrame) -> load e 0
                                         (Ref _, InFrame) -> pure e
                                         (Pointer _, InFrame) -> pure e
@@ -236,26 +237,46 @@ codegenExpr frame (ExprSub x y :&&.: _) = join (sub <$> codegenExprLoad frame x 
 codegenExpr frame (ExprMul x y :&&.: _) = join (mul <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 codegenExpr frame (ExprDiv x y :&&.: _) = join (udiv <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 codegenExpr frame (ExprMod x y :&&.: _) = join (urem <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
-codegenExpr frame (ExprNot x :&&.: _) = join (icmp IP.EQ (int64 0) <$> codegenExprLoad frame x)
-codegenExpr frame (ExprAnd x y :&&.: _) = do
+codegenExpr frame (ExprNot x :&&.: TC.AnnExpr _ (Just Integ)) = join (icmp IP.EQ (int32 0) <$> codegenExprLoad frame x)
+codegenExpr frame (ExprNot x :&&.: TC.AnnExpr _ (Just Byte)) = join (icmp IP.EQ (int8 0) <$> codegenExprLoad frame x)
+codegenExpr _ (ExprNot _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler error on ExprNot - missing type from typechecking stage"
+codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr _ (Just Integ)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
     x'' <- icmp NE (int64 0) x'
     y'' <- icmp NE (int64 0) y'
     z <- I.and x'' y''
     icmp NE (int64 0) z
-codegenExpr frame (ExprOr x y :&&.: _) = do
+codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr _ (Just Byte)) = do
+    x' <- codegenExprLoad frame x
+    y' <- codegenExprLoad frame y
+    x'' <- icmp NE (int8 0) x'
+    y'' <- icmp NE (int8 0) y'
+    z <- I.and x'' y''
+    icmp NE (int8 0) z
+codegenExpr _ (ExprAnd _ _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler error on ExprAnd - missing type from typechecking stage"
+codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr _ (Just Integ)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
     x'' <- icmp NE (int64 0) x'
     y'' <- icmp NE (int64 0) y'
-    z <- I.or x'' y''
+    z <- I.and x'' y''
     icmp NE (int64 0) z
-codegenExpr _ (ExprTrue :&&.: _) = pure $ int64 1
-codegenExpr _ (ExprFalse :&&.: _) = pure $ int64 0
+codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr _ (Just Byte)) = do
+    x' <- codegenExprLoad frame x
+    y' <- codegenExprLoad frame y
+    x'' <- icmp NE (int8 0) x'
+    y'' <- icmp NE (int8 0) y'
+    z <- I.and x'' y''
+    icmp NE (int8 0) z
+codegenExpr _ (ExprOr _ _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler error on ExprOr - missing type from typechecking stage"
+codegenExpr _ (ExprTrue :&&.: _) = pure $ int8 1
+codegenExpr _ (ExprFalse :&&.: _) = pure $ int8 0
 
 codegenCond :: (MonadState Env m, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Cond -> m LLVM.Operand
-codegenCond frame (CondExpr x :&&.: _) = join (icmp NE (int64 0) <$> codegenExprLoad frame x)
+codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Integ)) :&&.: _) = join (icmp IP.NE (int64 0) <$> codegenExprLoad frame x)
+codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Byte)) :&&.: _) = join (icmp IP.NE (int8 0) <$> codegenExprLoad frame x)
+codegenCond _ (CondExpr (_ :&&.: TC.AnnExpr _ Nothing) :&&.: _) = error "Internal compiler error on CondExpr - missing type from typechecking stage"
 codegenCond frame (CondNot x :&&.: _) = join (I.xor (bit 1) <$> codegenCond frame x)
 codegenCond frame (CondOr x y:&&.: _) = join (I.or <$> codegenCond frame x <*> codegenCond frame y)
 codegenCond frame (CondAnd x y:&&.: _) = join (I.and <$> codegenCond frame x <*> codegenCond frame y)
@@ -267,14 +288,17 @@ codegenCond frame (CondLe x y:&&.: _) = join (icmp IP.SLE <$> codegenExprLoad fr
 codegenCond frame (CondGe x y:&&.: _) = join (icmp IP.SGE <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 
 codegenCondStmt :: (MonadState Env m, MonadFix m, MonadModuleBuilder m, MonadIRBuilder m) => 
-                   LLVM.Operand -> ShortByteString -> LLVM.Name -> LLVM.Name -> Term (T :&&: TC.Ann) CondStmt -> m LLVM.Name
-codegenCondStmt frame label exit next (CondStmt c b :&&.: _) = mdo
+                   LLVM.Operand -> ShortByteString -> LLVM.Name -> Term (T :&&: TC.Ann) CondStmt -> m ()
+codegenCondStmt frame label exit (CondStmt c b :&&.: _) = mdo
+    br ifLabel
+    ifLabel <- block `named` (label <> "-check")
     cond <- codegenCond frame c
-    condBr cond ifThen next
-    ifThen <- block `named` label
+    condBr cond ifThen ifMerge
+    ifThen <- block `named` (label <> "-do")
     codegenBlock frame b
     mkTerminator $ br exit
-    pure ifThen
+    ifMerge <- block `named` (label <> "-merge")
+    pure ()
 
 codegenStmt :: (MonadState Env m, MonadFix m, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Stmt -> m ()
 codegenStmt _ (StmtSkip :&&.: _) = pure ()
@@ -286,15 +310,10 @@ codegenStmt frame (StmtAssign l e :&&.: _) = do
 codegenStmt frame (StmtProcCall c :&&.: _) = codegenFuncCall frame c *> pure ()
 codegenStmt frame (StmtReturn e :&&.: _) = join $ ret <$> codegenExprLoad frame e
 codegenStmt frame (StmtIf i ei me :&&.: _) = mdo
-    _ <- codegenCondStmt frame "if" exit elifs i
-    elifs <- foldrM (\ic next -> codegenCondStmt frame "elif" exit next ic) elseB ei
-    elseB <- case me of
-                Nothing -> pure exit
-                Just e -> do
-                    elseB' <- block `named` "else"
-                    codegenBlock frame e
-                    mkTerminator $ br exit
-                    pure elseB'
+    _ <- codegenCondStmt frame "if" exit i
+    for_ ei $ codegenCondStmt frame "elif" exit
+    for_ me $ codegenBlock frame
+    mkTerminator $ br exit
     exit <- block `named` "if-exit"
     pure ()
 codegenStmt frame (StmtLoop nm b :&&.: _) = mdo
@@ -305,14 +324,13 @@ codegenStmt frame (StmtLoop nm b :&&.: _) = mdo
                Just i -> s { labels = Map.insert i (loop,exit) (labels s), latestLabel = Just (loop, exit) }
                Nothing -> s { latestLabel = Just (loop, exit) } 
     codegenBlock frame b 
-    br loop
-    put s
+    mkTerminator $ br loop
     exit <- block `named` "loop-exit"
-    pure ()
+    put s
 codegenStmt _ (StmtBreak nm :&&.: _) = do
     l <- case nm of
-            Nothing -> fmap snd $ lookupLatestLabel
-            Just n -> fmap snd $ lookupLabel n
+              Nothing -> fmap snd $ lookupLatestLabel
+              Just n -> fmap snd $ lookupLabel n
     br l
 codegenStmt _ (StmtContinue nm :&&.: _) = do
     l <- case nm of
@@ -325,9 +343,8 @@ mkTerminator instr = do
     check <- hasTerminator
     unless check instr
 
-locally :: MonadState s m => m a -> m a
-locally computation = do
-  oldState <- get
-  result   <- computation
-  put oldState
-  return result
+ensureRet :: MonadIRBuilder m => Maybe DataType -> m ()
+ensureRet = mkTerminator . ensureRet'
+    where ensureRet' Nothing = retVoid
+          ensureRet' (Just Integ) = ret (int64 0)
+          ensureRet' (Just Byte) = ret (int8 0)

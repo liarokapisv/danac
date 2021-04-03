@@ -1,0 +1,96 @@
+; ModuleID = 'test'
+source_filename = "<string>"
+
+@"\0A!dlrow olleH_0" = unnamed_addr constant [14 x i8] c"\0A!dlrow olleH\00"
+
+declare void @__writeString(i8*)
+
+declare void @__writeChar(i8)
+
+declare i64 @__strlen(i8*)
+
+declare void @__writeInteger(i64)
+
+declare i64 @__readInteger()
+
+define void @main.reverse({ [32 x i8] }* %parent_0, i8* %s_0) {
+entry_0:
+  %0 = alloca { { [32 x i8] }*, i8*, i64, i64 }
+  %1 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 0
+  store { [32 x i8] }* %parent_0, { [32 x i8] }** %1
+  %2 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 1
+  store i8* %s_0, i8** %2
+  %ax_0 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 3
+  %index_0 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 1
+  %index_1 = load i8*, i8** %index_0
+  %index_2 = call i64 @__strlen(i8* %index_1)
+  store i64 %index_2, i64* %ax_0
+  %ax_1 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  store i64 0, i64* %ax_1
+  br label %loop_0
+
+loop_0:                                           ; preds = %if-exit_0, %entry_0
+  br label %if-check_0
+
+if-check_0:                                       ; preds = %loop_0
+  %3 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  %4 = load i64, i64* %3
+  %5 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 3
+  %6 = load i64, i64* %5
+  %7 = icmp slt i64 %4, %6
+  br i1 %7, label %if-do_0, label %if-merge_0
+
+if-do_0:                                          ; preds = %if-check_0
+  %ax_2 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 0
+  %ax_3 = load { [32 x i8] }*, { [32 x i8] }** %ax_2
+  %ax_4 = getelementptr { [32 x i8] }, { [32 x i8] }* %ax_3, i32 0, i32 0
+  %ax_5 = bitcast [32 x i8]* %ax_4 to i8*
+  %ax_6 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  %ax_7 = load i64, i64* %ax_6
+  %ax_8 = getelementptr i8, i8* %ax_5, i64 %ax_7
+  %index_3 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 1
+  %index_4 = load i8*, i8** %index_3
+  %index_5 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 3
+  %index_6 = load i64, i64* %index_5
+  %index_7 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  %index_8 = load i64, i64* %index_7
+  %index_9 = sub i64 %index_6, %index_8
+  %index_10 = sub i64 %index_9, 1
+  %index_11 = getelementptr i8, i8* %index_4, i64 %index_10
+  %index_12 = load i8, i8* %index_11
+  store i8 %index_12, i8* %ax_8
+  %ax_9 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  %index_13 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  %index_14 = load i64, i64* %index_13
+  %index_15 = add i64 %index_14, 1
+  store i64 %index_15, i64* %ax_9
+  br label %if-exit_0
+
+if-merge_0:                                       ; preds = %if-check_0
+  br label %loop-exit_0
+
+if-exit_0:                                        ; preds = %if-do_0
+  br label %loop_0
+
+loop-exit_0:                                      ; preds = %if-merge_0
+  %ax_10 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 0
+  %ax_11 = load { [32 x i8] }*, { [32 x i8] }** %ax_10
+  %ax_12 = getelementptr { [32 x i8] }, { [32 x i8] }* %ax_11, i32 0, i32 0
+  %ax_13 = bitcast [32 x i8]* %ax_12 to i8*
+  %ax_14 = getelementptr { { [32 x i8] }*, i8*, i64, i64 }, { { [32 x i8] }*, i8*, i64, i64 }* %0, i32 0, i32 2
+  %ax_15 = load i64, i64* %ax_14
+  %ax_16 = getelementptr i8, i8* %ax_13, i64 %ax_15
+  store i8 0, i8* %ax_16
+  ret void
+}
+
+define void @main() {
+entry_0:
+  %0 = alloca { [32 x i8] }
+  %1 = bitcast i8* getelementptr inbounds ([14 x i8], [14 x i8]* @"\0A!dlrow olleH_0", i32 0, i32 0) to i8*
+  call void @main.reverse({ [32 x i8] }* %0, i8* %1)
+  %2 = getelementptr { [32 x i8] }, { [32 x i8] }* %0, i32 0, i32 0
+  %3 = bitcast [32 x i8]* %2 to i8*
+  call void @__writeString(i8* %3)
+  ret void
+}
