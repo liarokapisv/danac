@@ -18,17 +18,23 @@ import Danac.Util.SourceSpan
 import Danac.Util.Annotation
 import Control.Monad (join)
 import Data.Comp.Multi.Term
+import qualified Control.Monad.State.Strict as ST
 
-type Parser = Parsec Void Text
+type Parser = ParsecT Void Text (ST.State SourcePos)
 
 space :: Parser ()
 space = L.space C.space1 (L.skipLineComment "//") (L.skipBlockCommentNested "(*" "*)")
 
 lexeme :: Parser a -> Parser a
-lexeme = L.lexeme space 
+lexeme p = do
+    x <- p
+    pos <- getSourcePos
+    ST.put pos
+    space 
+    pure x
 
 symbol :: Text -> Parser Text
-symbol = L.symbol space
+symbol = lexeme . C.string
 
 parens = try . between (symbol "(") (symbol ")") 
 brackets = try . between (symbol "[") (symbol "]")
@@ -74,14 +80,14 @@ located :: Parser x -> Parser (Located x)
 located p = do
   p1 <- getSourcePos
   x  <- p
-  p2 <- getSourcePos
+  p2 <- ST.get
   return $ (x, SS p1 p2)
 
 locatedt :: Parser (T LocatedT i) -> Parser (LocatedT i)
 locatedt p = do
   p1 <- getSourcePos
   x  <- p
-  p2 <- getSourcePos
+  p2 <- ST.get
   return $ (x :&.: SS p1 p2)
 
 mergeSpans :: SourceSpan -> SourceSpan -> SourceSpan
@@ -288,7 +294,7 @@ stmt = locatedt $
 dblock :: Parser (LocatedT Block)
 dblock = locatedt $ do
     symbol "begin"
-    s <- some stmt
+    s <- many stmt
     symbol "end"
     pure $ Block s
 
@@ -342,3 +348,6 @@ ast = locatedt $ do
     f <- funcDef
     eof
     pure $ Ast f
+
+parse :: String -> Text -> Either (ParseErrorBundle Text Void) (LocatedT Ast)
+parse fileName = flip ST.evalState (initialPos fileName) . runParserT ast fileName

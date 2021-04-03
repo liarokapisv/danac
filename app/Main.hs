@@ -7,11 +7,10 @@ module Main where
 
 import Data.Text (pack)
 import qualified Data.Text.IO as TIO
-import Danac.Parser (ast)
+import Danac.Parser (parse)
 import Danac.Renamer (rename)
 import Danac.TypeChecker (typecheck)
 import Danac.Codegen (codegen)
-import Text.Megaparsec (parse)
 import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Pretty.Simple (pPrint)
 import LLVM.Module
@@ -55,8 +54,7 @@ main = do
              info (options <**> helper)
                   (fullDesc <> header "danac - Dana compiler")
     text <- TIO.readFile (file opts)
-    let tree = parse ast "" text
-    case tree of
+    case parse (file opts) text of
         Left err -> putStr $ errorBundlePretty err
         Right pt | dumpParser opts -> pPrint pt
                  | otherwise ->  
