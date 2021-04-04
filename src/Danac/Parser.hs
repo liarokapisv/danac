@@ -56,7 +56,7 @@ asciicode = C.string "\\x" *> do
                 pure $ chr $ digitToInt x * 16 + digitToInt y
 
 escapeSequence :: Parser Char
-escapeSequence = lineFeed <|> tab <|> carret <|> zero <|> backslash <|> quote <|> dquote
+escapeSequence = lineFeed <|> tab <|> carret <|> zero <|> backslash <|> quote <|> dquote <|> asciicode
 
 usualChar :: Parser Char
 usualChar = notFollowedBy (C.char '\\' <|> C.char '\'' <|> C.char '"') *> C.printChar
@@ -298,25 +298,9 @@ dblock = locatedt $ do
     symbol "end"
     pure $ Block s
 
-indented :: Pos -> Parser a -> Parser (Pos, a)
-indented ref p = do 
-    pos <- L.indentGuard space GT ref 
-    v <- p
-    pure (pos, v)
-
-aligned :: Pos -> Parser a -> Parser a
-aligned ref p = (L.indentGuard space EQ ref <|> 
-                 L.indentGuard space GT ref) *> p
-
-blocked1 :: Pos -> Parser a -> Parser [a]
-blocked1 ref p = do 
-    (pos, a) <- indented ref p
-    rest <- many $ aligned pos p
-    return (a : rest)
-
 iblock :: Pos -> Parser (LocatedT Block)
 iblock ref = locatedt $ do
-    s <- blocked1 ref stmt
+    s <- many $ (L.indentGuard space GT ref *> stmt)
     pure $ Block s
 
 block :: Pos -> Parser (LocatedT Block)
