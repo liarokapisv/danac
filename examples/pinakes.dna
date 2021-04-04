@@ -1,0 +1,94 @@
+# Pairnei enan pinaka 3x3 kai apofainetai gia to an einai summetrikos h diagwnios
+
+def main
+    def isSymmetric is int: a as int[3][3]
+        var i j is int
+
+        i := 0
+        loop:
+            j := i+1
+            loop:
+                if (a[i][j] <> a[j][i]):
+                    return: 0
+                j := j+1
+                if (j >= 3):
+                    break
+            i := i+1
+            if (i >= 3-1):
+                break
+        return: 1
+
+    def isTriangular is int: a as int[3][3]
+        var lower upper i j is int
+
+        lower := 1
+        i := 0
+        loop:
+            j := i+1
+            loop:
+                if (a[i][j] <> 0):
+                    lower := 0
+                    break
+                j := j+1
+                if (j >= 3):
+                    break
+            i := i+1
+            if (i >= 3-1):
+                break
+        upper := 2
+        i := 1
+        loop:
+            j := 0
+            loop:
+                if (a[i][j] <> 0):
+                    upper := 0
+                    break
+                j := j+1
+                if (j >= i):
+                    break
+            i := i+1
+            if (i >= 3):
+                break
+        return: lower + upper
+
+    var a is int[3][3]
+    var i j is int
+
+    writeString: "Please, give all elements of the matrix (3 by 3):\n"
+    i := 0
+    loop:
+        j := 0
+        loop:
+            a[i][j] := readInteger()
+            j := j+1
+            if (j >= 3):
+                break
+        i := i+1
+        if (i >= 3):
+            break
+    i := 0
+    loop:
+        j := 0
+        loop:
+            writeInteger: a[i][j]
+            writeChar: ' '
+            j := j+1
+            if (j >= 3):
+                break
+        writeChar: '\n'
+        i := i+1
+        if (i >= 3):
+            break
+    if (isSymmetric(a)):
+        writeString: "The matrix is symmetric\n"
+    else:
+        writeString: "The matrix is not symmetric\n"
+    i := isTriangular(a)
+    if (i = 0):
+        writeString: "The matrix is not triangular\n"
+    elif (i = 1):
+        writeString: "The matrix is lower triangular\n"
+    elif (i = 2):
+        writeString: "The matrix is upper triangular\n"
+    elif (i = 3):
+        writeString: "The matrix is diagonal (lower and upper triangular)\n"

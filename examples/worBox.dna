@@ -1,0 +1,53 @@
+(* Dexetai mia leksh kai thn ektupwnei se plaisio
+   px: dana->
+   *****************
+   * D * A * N * A *
+   *****************
+
+   Termatizei me th leksh: peace
+*)
+
+def main
+
+    def printBoxed: word as byte[]
+        var len i is int
+
+        len := strlen(word)
+        writeString: "\n"
+        i := 0
+        loop:
+            writeString: "****"
+            i := i+1
+            if (i>=len):
+                break
+        writeString: "*\n"
+        i :=0
+        loop:
+            writeString: "* "
+            if((word[i]>='A') and (word[i]<='Z')):
+                writeChar: word[i]
+            elif((word[i]>='a') and (word[i]<='z')):
+                writeChar: word[i]+'A'-'a'
+            writeString: " "
+            i := i+1
+            if (i>=len):
+                break
+        writeString: "*\n"
+        i := 0
+        loop:
+            writeString: "****"
+            i := i+1
+            if (i>=len):
+                break
+        writeString: "*\n\n"
+
+    var word is byte[80]
+
+    loop:
+        writeString: "Please, give a word: "
+        readString: 80, word
+
+        if (strcmp(word, "peace") = 0):
+            break
+
+        printBoxed: word

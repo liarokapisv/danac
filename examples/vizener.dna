@@ -1,0 +1,95 @@
+# H methodos vizener opws ekshgeitai se sxetikh askhsh ths c
+
+def main
+    def tolower is byte: c as byte
+        if (((c>='a') and (c<='z'))):
+            return: c
+        else:
+            return: c+'A'-'a'
+
+    def encode: p as byte[]
+        var n i j is int
+        var codec codep codenew c is byte
+        var result is byte[21]
+
+        n := strlen(p)
+        i := 0
+        j := 0
+        loop:
+            c := readChar()
+            if (c = '0'):
+                writeChar: '\n'
+                break
+            if (((c >= 'a') and (c <= 'z')) or ((c >= 'A') and (c <= 'Z'))):
+                codec   := tolower(c) - 'a' + '\x01'
+                codep   := tolower(p[i]) - 'a' + '\x01'
+                codenew := codec + codep
+
+                if (codenew > '\x1a'):
+                    codenew := codenew - '\x1a'
+
+                if (((c >= 'a') and (c <= 'z'))):
+                    c := codenew - '\x01' + 'a'
+                else:
+                    c := codenew - '\x01' + 'A'
+
+                if (i+1 >= n):
+                    i := 0
+                else:
+                    i := i+1
+            result[j] := c
+            j := j+1
+        result[j] := '\0'
+        writeString: result
+
+    def decode: p as byte[]
+        var n i j is int
+        var codec codep codenew c is byte
+        var result is byte[21]
+
+        n := strlen(p)
+        i := 0
+        j := 0
+        loop:
+            c := readChar()
+            if (c = '0'):
+                writeChar: '\n'
+                break
+            if (((c>='a') and (c<='z')) or ((c>='A') and (c<='Z'))):
+                codec   := tolower(c) - 'a' + '\x01'
+                codep   := tolower(p[i]) - 'a' + '\x01'
+                codenew := codec - codep
+
+                if (codenew < '\0'):
+                    codenew := codenew + '\x1a'
+
+                if (((c>='a') and (c<='z'))):
+                    c := codenew - '\x01' + 'a'
+                else:
+                    c := codenew - '\x01' + 'A'
+
+                if (i+1 >= n):
+                    i := 0
+                else:
+                    i := i+1
+            result[j] := c
+            j := j+1
+        result[j] := '\0'
+        writeString: result
+
+    var key is byte[6]
+    var mode is byte
+
+    writeString: "Give 5 word key\n"
+    readString: 6, key
+    writeString: "Would you like to encode (e) or decode (d)?\n"
+    loop:
+        mode := readChar()
+        if mode = 'e' or mode = 'd':
+            break
+    writeChar: '\n'
+    writeString: "Give your text (not more than 20 words, 0 for end)\n"
+    if (mode = 'd'):
+        decode: key
+    else:
+        encode: key

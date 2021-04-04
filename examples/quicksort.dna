@@ -1,0 +1,57 @@
+def main
+
+    def quicksort: arr as int[], low high as int
+        var pivot i j temp is int
+        if(low < high):
+            pivot := low
+            i := low
+            j := high
+            loop:
+                if i > j: break
+                loop:
+                    if not (arr[i] <= arr[pivot] and i <= high): break
+                    i:=i+1
+                loop:
+                    if not (arr[j] > arr[pivot] and j >= low) : break
+                    j:=j-1
+                if(i < j):
+                    temp := arr[i]
+                    arr[i] := arr[j]
+                    arr[j] := temp
+            #writeString:"hellO"
+            #writeInteger:low
+            #writeInteger:high
+            #temp := readInteger()
+            temp := arr[j]
+            arr[j] := arr[pivot]
+            arr[pivot] := temp
+
+            quicksort: arr, low, j-1
+            quicksort: arr, j+1, high
+
+   def writeArray: n as int, x as int []
+                var i is int
+                i := 0
+                loop:
+                        if i < n:
+                                if i > 0: writeString: ", "
+                                writeInteger: x[i]
+                                i := i+1
+                        else: break
+                writeString: "\n"
+
+
+   var seed i is int
+   var x      is int [24]
+
+    seed := 65
+    i := 0
+    loop:
+        if i < 16:
+            seed := (seed * 137 + 220 + i) % 145
+            x[i] := seed
+            i := i+1
+        else: break
+   writeArray: 16, x
+   quicksort: x,0,15
+   writeArray: 16, x
