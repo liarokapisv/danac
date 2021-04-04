@@ -56,11 +56,20 @@ data Context = Context {
 }
 
 emptyContext = Context { frames = [], 
-                         globals = [("readInteger", FunctionType (Just Integ) []), 
-                                    ("writeInteger", FunctionType Nothing [Value (DType Integ)]), 
-                                    ("writeString", FunctionType Nothing [Pointer (DType Byte)]), 
+                         globals = [("writeInteger", FunctionType Nothing [Value (DType Integ)]), 
+                                    ("writeByte", FunctionType Nothing [Value (DType Byte)]), 
                                     ("writeChar", FunctionType Nothing [Value (DType Byte)]), 
-                                    ("strlen", FunctionType (Just Integ) [Pointer (DType Byte)])], 
+                                    ("writeString", FunctionType Nothing [Pointer (DType Byte)]), 
+                                    ("readInteger", FunctionType (Just Integ) []), 
+                                    ("readByte", FunctionType (Just Byte) []), 
+                                    ("readChar", FunctionType (Just Byte) []), 
+                                    ("readString", FunctionType Nothing [Value (DType Integ), Pointer (DType Byte)]), 
+                                    ("extend", FunctionType (Just Integ) [Value (DType Byte)]),
+                                    ("shrink", FunctionType (Just Byte) [Value (DType Integ)]),
+                                    ("strlen", FunctionType (Just Integ) [Pointer (DType Byte)]),
+                                    ("strcmp", FunctionType (Just Integ) [Pointer (DType Byte), Pointer (DType Byte)]),
+                                    ("strcpy", FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)]),
+                                    ("strcat", FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)])],
                          labels=[] }
 
 withNamespace t names = mconcat $ intersperse "." $ reverse $ (t : names)

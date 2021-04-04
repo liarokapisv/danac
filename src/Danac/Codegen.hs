@@ -17,7 +17,7 @@ import qualified LLVM.AST as LLVM
 import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST.Constant as C
 import LLVM.AST.IntegerPredicate 
-import LLVM.AST.Type (i8, i64, ptr, void)
+import LLVM.AST.Type (i8, i32, ptr, void)
 
 import qualified Danac.Renamer as RN
 import qualified Danac.TypeChecker as TC
@@ -42,7 +42,7 @@ import Control.Monad.Fix (MonadFix)
 
 dataType :: DataType -> LLVM.Type
 dataType Byte = i8
-dataType Integ = i64
+dataType Integ = i32
 
 maybeDataType :: Maybe DataType -> LLVM.Type
 maybeDataType Nothing = void
@@ -67,18 +67,27 @@ data Env = Env {
 emptyEnv :: Env
 emptyEnv = Env { functions = Map.empty, labels = Map.empty, latestLabel = Nothing }
 
+declBuiltinFunction :: (MonadState Env m, MonadModuleBuilder m) => ShortByteString -> LLVM.Type -> [LLVM.Type] -> m ()
+declBuiltinFunction name rt args = do
+    fn <- extern (LLVM.Name ("__" <> name)) args rt
+    modify $ \s -> s { functions = Map.insert (LLVM.Name name) fn $ functions s}
+
 codegen :: Text -> Term (T :&&: TC.Ann) Ast -> LLVM.Module
 codegen name (Ast f :&&.: _) = flip evalState emptyEnv $ buildModuleT (toShort $ encodeUtf8 name) $ do
-    writeString <- extern (LLVM.Name "__writeString") [ptr i8] void
-    modify $ \s -> s { functions = Map.insert (LLVM.Name "writeString") writeString $ functions s }
-    writeChar <- extern (LLVM.Name "__writeChar") [i8] void
-    modify $ \s -> s { functions = Map.insert (LLVM.Name "writeChar") writeChar $ functions s }
-    strlen <- extern (LLVM.Name "__strlen") [ptr i8] i64
-    modify $ \s -> s { functions = Map.insert (LLVM.Name "strlen") strlen $ functions s }
-    writeInteger <- extern (LLVM.Name "__writeInteger") [i64] void
-    modify $ \s -> s { functions = Map.insert (LLVM.Name "writeInteger") writeInteger $ functions s }
-    readInteger <- extern (LLVM.Name "__readInteger") [] i64
-    modify $ \s -> s { functions = Map.insert (LLVM.Name "readInteger") readInteger $ functions s }
+    declBuiltinFunction "writeInteger" void [i32]
+    declBuiltinFunction "writeByte" void [i8]
+    declBuiltinFunction "writeChar" void [i8]
+    declBuiltinFunction "writeString" void [ptr i8]
+    declBuiltinFunction "readInteger" i32 []
+    declBuiltinFunction "readByte" i8 []
+    declBuiltinFunction "readChar" i8 []
+    declBuiltinFunction "readString" void [i32, ptr i8]
+    declBuiltinFunction "extend" i32 [i8]
+    declBuiltinFunction "shrink" i8 [i32]
+    declBuiltinFunction "strlen" i32 [ptr i8]
+    declBuiltinFunction "strcmp" i32 [ptr i8, ptr i8]
+    declBuiltinFunction "strcpy" void [ptr i8, ptr i8]
+    declBuiltinFunction "strcat" void [ptr i8, ptr i8]
     codegenFuncDef Nothing f
 
 createFrame :: Maybe LLVM.Type -> Term (T :&&: TC.Ann) i -> LLVM.Type
@@ -234,11 +243,11 @@ codegenExprLoad frame x@(ExprLvalue _ :&&.: _) = codegenExpr frame x >>= \o -> l
 codegenExprLoad frame x = codegenExpr frame x
 
 codegenExpr :: (MonadState Env m, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Expr -> m LLVM.Operand
-codegenExpr _ (ExprInt x :&&.: _) = pure $ int64 x
+codegenExpr _ (ExprInt x :&&.: _) = pure $ int32 x
 codegenExpr _ (ExprChar x :&&.: _) = pure $ int8 $ toInteger $ fromEnum x
 codegenExpr frame (ExprLvalue x :&&.: _) = codegenLvalue frame x
 codegenExpr frame (ExprFuncCall x :&&.: _) = codegenFuncCall frame x
-codegenExpr frame (ExprMinus x :&&.: _) = join (xor (int64 0) <$> codegenExprLoad frame x)
+codegenExpr frame (ExprMinus x :&&.: _) = join (xor (int32 0) <$> codegenExprLoad frame x)
 codegenExpr frame (ExprAdd x y :&&.: _) = join (add <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 codegenExpr frame (ExprSub x y :&&.: _) = join (sub <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 codegenExpr frame (ExprMul x y :&&.: _) = join (mul <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
@@ -250,10 +259,10 @@ codegenExpr _ (ExprNot _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler 
 codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr _ (Just Integ)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
-    x'' <- icmp NE (int64 0) x'
-    y'' <- icmp NE (int64 0) y'
+    x'' <- icmp NE (int32 0) x'
+    y'' <- icmp NE (int32 0) y'
     z <- I.and x'' y''
-    icmp NE (int64 0) z
+    icmp NE (int32 0) z
 codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr _ (Just Byte)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
@@ -265,10 +274,10 @@ codegenExpr _ (ExprAnd _ _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compile
 codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr _ (Just Integ)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
-    x'' <- icmp NE (int64 0) x'
-    y'' <- icmp NE (int64 0) y'
+    x'' <- icmp NE (int32 0) x'
+    y'' <- icmp NE (int32 0) y'
     z <- I.and x'' y''
-    icmp NE (int64 0) z
+    icmp NE (int32 0) z
 codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr _ (Just Byte)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
@@ -281,7 +290,7 @@ codegenExpr _ (ExprTrue :&&.: _) = pure $ int8 1
 codegenExpr _ (ExprFalse :&&.: _) = pure $ int8 0
 
 codegenCond :: (MonadState Env m, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Cond -> m LLVM.Operand
-codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Integ)) :&&.: _) = join (icmp IP.NE (int64 0) <$> codegenExprLoad frame x)
+codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Integ)) :&&.: _) = join (icmp IP.NE (int32 0) <$> codegenExprLoad frame x)
 codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Byte)) :&&.: _) = join (icmp IP.NE (int8 0) <$> codegenExprLoad frame x)
 codegenCond _ (CondExpr (_ :&&.: TC.AnnExpr _ Nothing) :&&.: _) = error "Internal compiler error on CondExpr - missing type from typechecking stage"
 codegenCond frame (CondNot x :&&.: _) = join (I.xor (bit 1) <$> codegenCond frame x)
@@ -353,5 +362,5 @@ mkTerminator instr = do
 ensureRet :: MonadIRBuilder m => Maybe DataType -> m ()
 ensureRet = mkTerminator . ensureRet'
     where ensureRet' Nothing = retVoid
-          ensureRet' (Just Integ) = ret (int64 0)
+          ensureRet' (Just Integ) = ret (int32 0)
           ensureRet' (Just Byte) = ret (int8 0)
