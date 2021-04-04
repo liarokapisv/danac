@@ -23,7 +23,7 @@ import qualified Control.Monad.State.Strict as ST
 type Parser = ParsecT Void Text (ST.State SourcePos)
 
 space :: Parser ()
-space = L.space C.space1 (L.skipLineComment "//") (L.skipBlockCommentNested "(*" "*)")
+space = L.space C.space1 (L.skipLineComment "#") (L.skipBlockCommentNested "(*" "*)")
 
 lexeme :: Parser a -> Parser a
 lexeme p = do
@@ -305,7 +305,8 @@ indented ref p = do
     pure (pos, v)
 
 aligned :: Pos -> Parser a -> Parser a
-aligned ref p = L.indentGuard space EQ ref *> p
+aligned ref p = (L.indentGuard space EQ ref <|> 
+                 L.indentGuard space GT ref) *> p
 
 blocked1 :: Pos -> Parser a -> Parser [a]
 blocked1 ref p = do 
@@ -345,6 +346,7 @@ funcDef = locatedt $ do
           
 ast :: Parser (LocatedT Ast)
 ast = locatedt $ do
+    space
     f <- funcDef
     eof
     pure $ Ast f

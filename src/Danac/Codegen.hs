@@ -176,11 +176,10 @@ codegenVarId frame (VarIdentifier _ :&&.: TC.AnnVariable _ f links offset vt) = 
     p <- getFrameElement frame links (offset + (hasParent f :: Int))
     case vt of
         RN.Param (Value (DType _)) -> pure p
-        RN.Param (Value (AType t _)) -> do
-               p' <- load p 0
-               bitcast p' (ptr $ ttype t)
-        RN.Param _ -> load p 0
-        RN.Local (AType t _) -> bitcast p (ptr $ ttype t)
+        RN.Param (Value (AType _ _)) -> load p 0
+        RN.Param (Ref _) -> load p 0
+        RN.Param (Pointer _) -> load p 0
+        RN.Local (AType _ _) -> pure p
         RN.Local (DType _) -> pure p
         where hasParent t = if Data.Text.any (=='.') t then 1 else 0
 
@@ -190,10 +189,17 @@ codegenLvalue _ (LvalueStr x :&&.: _) = do
     name <- freshName  $ toShort $ encodeUtf8 x
     c <- globalStringPtr (unpack x) name
     pure $ LLVM.ConstantOperand c
-codegenLvalue frame (LvalueAx l e :&&.: _) = do
+codegenLvalue frame (LvalueAx l@(LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Param (Pointer _))) :&&.: _) e :&&.: _) = do
     l' <- codegenLvalue frame l
     e' <- codegenExprLoad frame e
     gep l' [e']
+codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Param (Value (DType _)))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
+codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Local (DType _ ))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
+codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Param (Ref _))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
+codegenLvalue frame (LvalueAx l e :&&.: _) = do
+    l' <- codegenLvalue frame l
+    e' <- codegenExprLoad frame e
+    gep l' [int32 0, e']
 
 data ValueTag = GlobalString | InFrame | Temporary
 
@@ -210,9 +216,10 @@ codegenFuncCall frame (FuncCall (FuncIdentifier text :&&.: TC.AnnFunction _ mlin
                                     case (ft, tag) of
                                         (Value (AType _ _), GlobalString) -> pure e
                                         (Pointer _, GlobalString) -> bitcast e (ptr i8)
-                                        (Value _, InFrame) -> load e 0
+                                        (Value (AType _ _), InFrame) -> pure e
+                                        (Value (DType _), InFrame) -> load e 0
                                         (Ref _, InFrame) -> pure e
-                                        (Pointer _, InFrame) -> pure e
+                                        (Pointer t, InFrame) -> bitcast e (ptr $ ttype t)
                                         (Value _, Temporary) -> pure e
                                         _ -> error "Internal compiler error on codegenFuncCall"
     let es''' = fmap (,[]) es''

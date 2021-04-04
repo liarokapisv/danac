@@ -39,11 +39,13 @@ data Options = Options {
 options :: Parser Options
 options = Options <$> argument str 
                         (metavar "FILE"
+                        <> action "file"
                         <> help "Read input from FILE")
                   <*> strOption
                         (long "output"
                         <> short 'o'
                         <> metavar "FILE"
+                        <> action "file"
                         <> Options.Applicative.value "a.out"
                         <> help "Write output to FILE")
                   <*> switch
