@@ -124,9 +124,12 @@ codegenFuncDef :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => Maybe 
 codegenFuncDef mparent f@(FuncDef header@(Header _ rt _ :&&.: _) localDefs body :&&.: _) = mdo
     let (name, paramTypes, retType) = codegenHeader mparent header
     let frameType = createFrame mparent f
-    let op = LLVM.ConstantOperand $ C.GlobalReference (ptr $ LLVM.FunctionType retType (fst <$> paramTypes) False) name
+    let cname = case mparent of
+                    Nothing -> "main"
+                    Just _ -> name
+    let op = LLVM.ConstantOperand $ C.GlobalReference (ptr $ LLVM.FunctionType retType (fst <$> paramTypes) False) cname
     modify $ (\s -> s { functions = Map.insert name op $ functions s })
-    _ <- function name paramTypes retType $ \params -> do
+    _ <- function cname paramTypes retType $ \params -> do
         _entry <- block `named` "entry"
         for_ localDefs $ codegenLocalDef frameType
         codegenBody frameType body params
