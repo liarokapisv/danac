@@ -103,7 +103,7 @@ compile llvmModule outfile opt =
                        O2 -> "-O2"
                        O3 -> "-O3"
                        ON -> ""
-      callProcess "clang" ["-Wno-override-module", "-lm", llvm, runtime, optFlag, "-o", "../" <> outfile]
+      callProcess "clang" ["-Wno-override-module", "-lm", llvm, runtime, optFlag, "-flto", "-o", "../" <> outfile]
 
 main :: IO ()
 main = do
