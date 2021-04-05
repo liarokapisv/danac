@@ -15,16 +15,18 @@ import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Pretty.Simple (pPrint)
 import LLVM.Module
 import LLVM.Context
-import LLVM.AST
+import LLVM.AST hiding (value)
+import LLVM.Analysis
 import Options.Applicative
 import Data.Foldable (traverse_)
 import qualified Data.ByteString.Char8 as B
 
-import System.IO
 import System.Directory
 import System.Process
 import System.Posix.Temp
 import Control.Exception (bracket)
+
+data OptLevel = O0 | O1 | O2 | O3 | ON
 
 data Options = Options {
     input :: String,
@@ -33,7 +35,8 @@ data Options = Options {
     dumpRenamer :: Bool,
     dumpTypeChecker :: Bool,
     dumpCodegen :: Bool,
-    dumpASM ::Bool
+    dumpASM ::Bool,
+    optLevel :: OptLevel
 }
 
 options :: Parser Options
@@ -46,7 +49,7 @@ options = Options <$> argument str
                         <> short 'o'
                         <> metavar "FILE"
                         <> action "file"
-                        <> Options.Applicative.value "a.out"
+                        <> value "a.out"
                         <> help "Write output to FILE")
                   <*> switch
                         (long "dump-parser-tree"
@@ -68,17 +71,39 @@ options = Options <$> argument str
                         (long "dump-llvm-asm"
                         <> short 'l'
                         <> help "Dumps post-codegen llvm assembly")
+                  <*> option optLevelReader
+                        (long "opt-level"
+                        <> short 'O'
+                        <> metavar "LEVEL"
+                        <> value ON
+                        <> help "Optimization level")
 
-compile :: LLVM.AST.Module -> FilePath -> IO ()
-compile llvmModule outfile =
+optLevelReader :: ReadM OptLevel
+optLevelReader = maybeReader $ \s ->
+    case s of
+        "0" -> Just O0
+        "1" -> Just O1
+        "2" -> Just O2
+        "3" -> Just O3
+        _  -> Nothing
+
+compile :: LLVM.AST.Module -> FilePath -> OptLevel -> IO ()
+compile llvmModule outfile opt =
   bracket (mkdtemp "build") removePathForcibly $ \buildDir ->
     withCurrentDirectory buildDir $ do
-      (llvm, llvmHandle) <- mkstemps "output" ".ll"
-      let runtime = "../src/runtime.c"
+      let llvm = "output.ll"
+          runtime = "../src/runtime.c"
       withContext $ \context ->
-            withModuleFromAST context llvmModule (writeLLVMAssemblyToFile (File llvm))
-      hClose llvmHandle
-      callProcess "clang" ["-Wno-override-module", "-lm", llvm, runtime, "-o", "../" <> outfile]
+            withModuleFromAST context llvmModule $ \modl -> do
+                verify modl
+                writeLLVMAssemblyToFile (File llvm) modl
+      let optFlag = case opt of
+                       O0 -> "-O0"
+                       O1 -> "-O1"
+                       O2 -> "-O2"
+                       O3 -> "-O3"
+                       ON -> ""
+      callProcess "clang" ["-Wno-override-module", "-lm", llvm, runtime, optFlag, "-o", "../" <> outfile]
 
 main :: IO ()
 main = do
@@ -105,4 +130,4 @@ main = do
                                                                   withModuleFromAST context m moduleLLVMAssembly
                                                             B.putStr assembly
                                                        else
-                                                            compile m (output opts)
+                                                            compile m (output opts) (optLevel opts)
