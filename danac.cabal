@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2660d8e95a76455879f179c0623d9fae0d2d4f01a7bb9c79d59871889a72f1eb
+-- hash: 3f6814957ef1b2c81904be6f33821e3dc0e1707467c31bd6fe06d3e60d579db3
 
 name:           danac
 version:        0.0.0
@@ -30,6 +30,7 @@ library
     , bytestring
     , compdata
     , containers
+    , errata
     , llvm-hs-pure
     , megaparsec
     , mtl
@@ -52,6 +53,7 @@ executable danac
     , compdata
     , danac
     , directory
+    , errata
     , llvm-hs
     , llvm-hs-pure
     , megaparsec

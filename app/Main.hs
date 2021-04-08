@@ -2,16 +2,20 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
-import Data.Text (pack)
+import Data.Text (Text, pack)
 import qualified Data.Text.IO as TIO
+import qualified Data.Text.Lazy.IO as TLIO
 import Danac.Parser (parse)
-import Danac.Renamer (rename)
+import Danac.Renamer (rename, Error(..))
 import Danac.TypeChecker (typecheck)
 import Danac.Codegen (codegen)
+import Danac.Util.SourceSpan
 import Text.Megaparsec.Error (errorBundlePretty)
+import qualified Text.Megaparsec.Pos as MP
 import Text.Pretty.Simple (pPrint)
 import LLVM.Module
 import LLVM.Context
@@ -25,6 +29,34 @@ import System.Directory
 import System.Process
 import System.Posix.Temp
 import Control.Exception (bracket)
+import Errata
+
+toErrataHelper :: Text -> SourceSpan -> Errata
+toErrataHelper text (SS (MP.SourcePos fp l c1) (MP.SourcePos _ _ c2)) =
+    errataSimple (Just text)
+        (blockSimple fancyRedStyle fp Nothing
+            (MP.unPos l, MP.unPos c1, MP.unPos c2, Nothing)
+            Nothing
+        )
+        Nothing
+
+toErrataHelper' :: Text -> Text -> SourceSpan -> Text -> SourceSpan -> Errata
+toErrataHelper' text t1 (SS (MP.SourcePos fp l1 c11) (MP.SourcePos _ _ c12)) t2 (SS (MP.SourcePos _ l2 c21) (MP.SourcePos _ _ c22)) =
+    errataSimple (Just text)
+        (blockConnected fancyRedStyle fp Nothing
+            (MP.unPos l1, MP.unPos c11, MP.unPos c12, Just t1)
+            (MP.unPos l2, MP.unPos c21, MP.unPos c22, Just t2)
+            Nothing
+        )
+        Nothing
+
+toErrata :: Error -> Errata
+toErrata (UndefinedVariable _ sp) = toErrataHelper "error: undefined variable" sp
+toErrata (UndefinedFunction _ sp) = toErrataHelper "error: undefined function" sp
+toErrata (UndefinedLabel _ sp) = toErrataHelper "error: undefined label" sp
+toErrata (AlreadyDefinedVariable _ sp1 sp2) = toErrataHelper' "error: redefined variable" "redefined here" sp1  "variable originally defined here" sp2
+toErrata (AlreadyDefinedFunction _ sp) = toErrataHelper "error: redefined function" sp
+toErrata (AlreadyDefinedLabel _ sp) = toErrataHelper "error: redefined label" sp
 
 data OptLevel = O0 | O1 | O2 | O3 | ON
 
@@ -116,7 +148,7 @@ main = do
         Right pt | dumpParser opts -> pPrint pt
                  | otherwise ->  
                     case rename pt of
-                        Left errors -> traverse_ print errors
+                        Left errors -> TLIO.putStr $ prettyErrors text $ fmap toErrata errors
                         Right t | dumpRenamer opts -> pPrint t
                                 | otherwise -> 
                                     case typecheck t of

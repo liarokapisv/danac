@@ -127,14 +127,14 @@ fancyType =
            
 fparDefs :: Parser [LocatedT FparDef]
 fparDefs = do
-        is <- some $ located identifier
+        is <- some genId
         symbol "as" 
         f <- fancyType
-        pure $ [FparDef i f :&.: sp | (i, sp) <- is]
+        pure $ [FparDef i f :&.: sp | i@(_ :&.: sp) <- is]
 
 header :: Parser (LocatedT Header)
 header = locatedt $ 
-    do i <- identifier 
+    do i <- genId
        d <- optional (symbol "is" *> dataType)
        defs <- optional (do symbol ":" 
                             fdfs <- sepBy1 fparDefs (symbol ",")
@@ -152,10 +152,13 @@ funcDecl = locatedt $
 varDefs :: Parser [LocatedT VarDef]
 varDefs = do
        symbol "var"
-       ids <- some $ located identifier
+       ids <- some genId
        symbol "is"
        t <- stype
-       pure $ [VarDef i t :&.: s | (i, s) <- ids]
+       pure $ [VarDef i t :&.: s | i@(_ :&.: s) <- ids]
+
+genId  :: Parser (LocatedT Identifier)
+genId = locatedt $ Identifier <$> identifier
 
 varId :: Parser (LocatedT VarIdentifier)
 varId = locatedt $ VarIdentifier <$> identifier
@@ -281,12 +284,12 @@ stmt = locatedt $
     (symbol "skip" *> pure StmtSkip) <|>
     (symbol "exit" *> pure StmtExit) <|>
     (symbol "return" *> symbol ":" *> (StmtReturn <$> expr)) <|>
-    (symbol "break" *> (StmtBreak <$> optional (symbol ":" *> identifier))) <|>
-    (symbol "continue" *> (StmtContinue <$> optional (symbol ":" *> identifier))) <|>
+    (symbol "break" *> (StmtBreak <$> optional (symbol ":" *> genId))) <|>
+    (symbol "continue" *> (StmtContinue <$> optional (symbol ":" *> genId))) <|>
     (StmtIf <$> ifStmt <*> many elifStmt <*> optional elseBlock) <|>
     (do pos <- L.indentLevel
         symbol "loop"
-        mi <- optional identifier
+        mi <- optional genId
         symbol ":"
         b <- block pos
         pure $ StmtLoop mi b)

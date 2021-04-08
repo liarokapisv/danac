@@ -145,13 +145,13 @@ codegenFuncDecl mparent (FuncDecl header :&&.: _) = mdo
     pure ()
 
 codegenHeader :: Maybe LLVM.Type -> Term (T :&&: TC.Ann) Header -> (LLVM.Name, [(LLVM.Type, ParameterName)], LLVM.Type)
-codegenHeader mparent (Header name mdt fparDefs :&&.: _) = 
+codegenHeader mparent (Header (Identifier name :&&.: _) mdt fparDefs :&&.: _) = 
     (LLVM.Name $ toShort $ encodeUtf8 name, 
      maybeToList (fmap (\t -> (ptr t, ParameterName "parent")) mparent) ++  fmap codegenFparDef fparDefs, 
      maybeDataType mdt)
 
 codegenFparDef :: Term (T :&&: TC.Ann) FparDef -> (LLVM.Type, ParameterName)
-codegenFparDef (FparDef name ftp :&&.: _) = (fparType ftp, ParameterName $ toShort $ encodeUtf8 name)
+codegenFparDef (FparDef (Identifier name :&&.: _) ftp :&&.: _) = (fparType ftp, ParameterName $ toShort $ encodeUtf8 name)
 
 codegenLocalDef :: (MonadState Env m, MonadFix m, MonadModuleBuilder m) => LLVM.Type -> Term (T :&&: TC.Ann) LocalDef -> m ()
 codegenLocalDef parent (LocalDefFuncDef fd :&&.: _) = codegenFuncDef (Just parent) fd
@@ -340,7 +340,7 @@ codegenStmt frame (StmtLoop nm b :&&.: _) = mdo
     loop <- block `named` "loop"
     s <- get
     put $ case nm of
-               Just i -> s { labels = Map.insert i (loop,exit) (labels s), latestLabel = Just (loop, exit) }
+               Just (Identifier i :&&.: _) -> s { labels = Map.insert i (loop,exit) (labels s), latestLabel = Just (loop, exit) }
                Nothing -> s { latestLabel = Just (loop, exit) } 
     codegenBlock frame b 
     mkTerminator $ br loop
@@ -349,12 +349,12 @@ codegenStmt frame (StmtLoop nm b :&&.: _) = mdo
 codegenStmt _ (StmtBreak nm :&&.: _) = do
     l <- case nm of
               Nothing -> fmap snd $ lookupLatestLabel
-              Just n -> fmap snd $ lookupLabel n
+              Just (Identifier n :&&.: _) -> fmap snd $ lookupLabel n
     br l
 codegenStmt _ (StmtContinue nm :&&.: _) = do
     l <- case nm of
             Nothing -> fmap fst $ lookupLatestLabel
-            Just n -> fmap fst $ lookupLabel n
+            Just (Identifier n :&&.: _) -> fmap fst $ lookupLabel n
     br l
 
 mkTerminator :: MonadIRBuilder m => m () -> m ()

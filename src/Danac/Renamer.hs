@@ -34,7 +34,7 @@ import GHC.Show (appPrec, appPrec1)
 data Error = UndefinedVariable Text SourceSpan
            | UndefinedFunction Text SourceSpan
            | UndefinedLabel Text SourceSpan
-           | AlreadyDefinedVariable Text SourceSpan
+           | AlreadyDefinedVariable Text SourceSpan SourceSpan
            | AlreadyDefinedFunction Text SourceSpan
            | AlreadyDefinedLabel Text SourceSpan
     deriving Show
@@ -42,34 +42,45 @@ data Error = UndefinedVariable Text SourceSpan
 data VarType = Param FparType | Local Type
     deriving Show
 
+data VarInfo = VarInfo {
+    vname :: Text,
+    vtype :: VarType,
+    vspan :: SourceSpan
+}
+
+data FuncInfo = FuncInfo {
+    fname :: Text,
+    ftype :: FunctionType
+}
+
 data Frame = Frame {
     functionName :: Text,
     functionType :: FunctionType,
-    variables :: [(Text, VarType)],
-    functions :: [(Text, FunctionType)]
+    variables :: [VarInfo],
+    functions :: [FuncInfo]
 }
 
 data Context = Context {
     frames :: [Frame],
-    globals :: [(Text, FunctionType)],
+    globals :: [FuncInfo],
     labels :: [Text]
 }
 
 emptyContext = Context { frames = [], 
-                         globals = [("writeInteger", FunctionType Nothing [Value (DType Integ)]), 
-                                    ("writeByte", FunctionType Nothing [Value (DType Byte)]), 
-                                    ("writeChar", FunctionType Nothing [Value (DType Byte)]), 
-                                    ("writeString", FunctionType Nothing [Pointer (DType Byte)]), 
-                                    ("readInteger", FunctionType (Just Integ) []), 
-                                    ("readByte", FunctionType (Just Byte) []), 
-                                    ("readChar", FunctionType (Just Byte) []), 
-                                    ("readString", FunctionType Nothing [Value (DType Integ), Pointer (DType Byte)]), 
-                                    ("extend", FunctionType (Just Integ) [Value (DType Byte)]),
-                                    ("shrink", FunctionType (Just Byte) [Value (DType Integ)]),
-                                    ("strlen", FunctionType (Just Integ) [Pointer (DType Byte)]),
-                                    ("strcmp", FunctionType (Just Integ) [Pointer (DType Byte), Pointer (DType Byte)]),
-                                    ("strcpy", FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)]),
-                                    ("strcat", FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)])],
+                         globals = [FuncInfo { fname = "writeInteger", ftype = FunctionType Nothing [Value (DType Integ)]}, 
+                                    FuncInfo { fname = "writeByte", ftype = FunctionType Nothing [Value (DType Byte)]}, 
+                                    FuncInfo { fname = "writeChar", ftype = FunctionType Nothing [Value (DType Byte)]}, 
+                                    FuncInfo { fname = "writeString", ftype = FunctionType Nothing [Pointer (DType Byte)]}, 
+                                    FuncInfo { fname = "readInteger", ftype = FunctionType (Just Integ) []}, 
+                                    FuncInfo { fname = "readByte", ftype = FunctionType (Just Byte) []}, 
+                                    FuncInfo { fname = "readChar", ftype = FunctionType (Just Byte) []}, 
+                                    FuncInfo { fname = "readString", ftype = FunctionType Nothing [Value (DType Integ), Pointer (DType Byte)]},
+                                    FuncInfo { fname = "extend", ftype = FunctionType (Just Integ) [Value (DType Byte)]},
+                                    FuncInfo { fname = "shrink", ftype = FunctionType (Just Byte) [Value (DType Integ)]},
+                                    FuncInfo { fname = "strlen", ftype = FunctionType (Just Integ) [Pointer (DType Byte)]},
+                                    FuncInfo { fname = "strcmp", ftype = FunctionType (Just Integ) [Pointer (DType Byte), Pointer (DType Byte)]},
+                                    FuncInfo { fname = "strcpy", ftype = FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)]},
+                                    FuncInfo { fname = "strcat", ftype = FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)]}],
                          labels=[] }
 
 withNamespace t names = mconcat $ intersperse "." $ reverse $ (t : names)
@@ -78,8 +89,8 @@ lookVariable :: Text -> Context -> Maybe (Text, Int, Int, VarType)
 lookVariable t c = go 0 (frames c)
     where go _ [] = Nothing
           go n (Frame {functionName = name, variables = vs} : fs) = 
-                case find ((==t).fst.snd) (zip [0..] vs) of
-                        Just (i,(_,typ)) -> Just (withNamespace name (fmap functionName fs), n, i, typ)
+                case find ((==t).vname.snd) (zip [0..] vs) of
+                        Just (i, VarInfo {vtype=typ}) -> Just (withNamespace name (fmap functionName fs), n, i, typ)
                         Nothing -> go (n+1) fs
 
 declareFunction :: Text -> FunctionType -> Context -> Context
@@ -88,17 +99,17 @@ declareFunction n t c =
             [] -> c
             (f : fs) -> c { frames = appendFunction f : fs }
     where appendFunction :: Frame -> Frame
-          appendFunction f = f { functions = (n,t) : functions f }
+          appendFunction f = f { functions = FuncInfo { fname = n, ftype = t } : functions f }
 
 lookFunction :: Text -> Context -> Maybe (Text, Maybe Int, FunctionType)
 lookFunction t c = case go 0 (frames c) of
                         Just n -> Just n
-                        Nothing -> case find ((==t).fst) (globals c) of
-                                      Just (_,typ) -> Just (t, Nothing, typ)
+                        Nothing -> case find ((==t).fname) (globals c) of
+                                      Just (FuncInfo { ftype = typ }) -> Just (t, Nothing, typ)
                                       Nothing -> Nothing
     where go _ [] = Nothing
-          go n fs@(f : fs') = case find ((==t).fst) (functions f) of
-                                 Just (_, typ) -> Just $ (withNamespace t (fmap functionName fs), Just n, typ)
+          go n fs@(f : fs') = case find ((==t).fname) (functions f) of
+                                 Just (FuncInfo { ftype = typ }) -> Just $ (withNamespace t (fmap functionName fs), Just n, typ)
                                  Nothing | t == functionName f -> Just (withNamespace t (fmap functionName fs'), Just (n+1), functionType f)
                                          | otherwise -> go (n+1) fs'
 
@@ -114,29 +125,30 @@ headerToType :: Term (T :&: SourceSpan) Header -> FunctionType
 headerToType (Header _ dt fdefs :&.: _) = FunctionType dt $ getFparTypes fdefs
 
 extractName :: Term (T :&: SourceSpan) Header -> Text
-extractName (Header t _ _ :&.: _) = t
+extractName (Header (Identifier t :&.: _) _ _ :&.: _) = t
                 
-collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, FunctionType, [(Text, VarType)])
-collectHeaderVarNames h@(Header name _ fdefs :&.: _) = fmap (name, headerToType h,) $ go [] fdefs
-    where go :: [(Text, VarType)] -> [Term (T :&: SourceSpan) FparDef] -> Either Error [(Text, VarType)]
+collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, FunctionType, [VarInfo])
+collectHeaderVarNames h@(Header (Identifier name :&.: _) _ fdefs :&.: _) = fmap (name, headerToType h,) $ go [] fdefs
+    where go :: [VarInfo] -> [Term (T :&: SourceSpan) FparDef] -> Either Error [VarInfo]
           go ns [] = Right ns
-          go ns (FparDef n' t :&.: s : fs) = 
-                    case find ((==n').fst) ns of
-                        Just _ -> Left $ AlreadyDefinedVariable n' s
-                        Nothing -> go ((n', Param t) : ns) fs
+          go ns (FparDef (Identifier n' :&.: _) t :&.: s : fs) = 
+                    case find ((==n').vname) ns of
+                        Just n'' -> Left $ AlreadyDefinedVariable n' s (vspan n'')
+                        Nothing -> go (VarInfo { vname = n', vtype = Param t, vspan = s } : ns) fs
 
 
-collectLocalNames :: ([(Text, VarType)],[(Text, FunctionType)]) -> [Term (T :&: SourceSpan) LocalDef] -> Either Error ([(Text, VarType)],[(Text, FunctionType)])
+collectLocalNames :: ([VarInfo],[FuncInfo]) -> [Term (T :&: SourceSpan) LocalDef] -> Either Error ([VarInfo],[FuncInfo])
 collectLocalNames (vars,fns) [] = Right (vars, fns)
-collectLocalNames (vars,fns) (LocalDefFuncDef (FuncDef h@(Header t _ _ :&.: s) _ _ :&.: _) :&.: _ : ds) 
-    | isJust (find ((==t).fst) vars) = Left $ AlreadyDefinedFunction t s
-    | otherwise = collectLocalNames (vars,((t, headerToType h) : fns)) ds
-collectLocalNames (vars,fns) (LocalDefFuncDecl (FuncDecl h@(Header t _ _ :&.: s) :&.: _) :&.: _ : ds) 
-    | isJust (find ((==t).fst) vars) = Left $ AlreadyDefinedFunction t s
-    | otherwise = collectLocalNames (vars,((t, headerToType h) : fns)) ds
-collectLocalNames (vars,fns) (LocalDefVarDef (VarDef name t :&.: s) :&.: _ : ds) 
-    | isJust (find ((==name).fst) vars) = Left $ AlreadyDefinedVariable name s 
-    | otherwise = collectLocalNames (((name, Local t) : vars),fns) ds
+collectLocalNames (vars,fns) (LocalDefFuncDef (FuncDef h@(Header (Identifier t :&.: _) _ _ :&.: s) _ _ :&.: _) :&.: _ : ds) 
+    | isJust (find ((==t).fname) fns) = Left $ AlreadyDefinedFunction t s
+    | otherwise = collectLocalNames (vars,(FuncInfo { fname = t, ftype = headerToType h } : fns)) ds
+collectLocalNames (vars,fns) (LocalDefFuncDecl (FuncDecl h@(Header (Identifier t :&.: _) _ _ :&.: s) :&.: _) :&.: _ : ds) 
+    | isJust (find ((==t).fname) fns) = Left $ AlreadyDefinedFunction t s
+    | otherwise = collectLocalNames (vars,( FuncInfo { fname = t, ftype = headerToType h } : fns)) ds
+collectLocalNames (vars,fns) (LocalDefVarDef (VarDef (Identifier name :&.: _) t :&.: s) :&.: _ : ds) =
+    case find ((==name).vname) vars of
+        Just v -> Left $ AlreadyDefinedVariable name s (vspan v)
+        Nothing -> collectLocalNames ((VarInfo {vname = name, vtype = Local t, vspan = s } : vars),fns) ds
 
 createFrame :: Term (T :&: SourceSpan) Header -> [Term (T :&: SourceSpan) LocalDef] -> Either Error (Text, Frame)
 createFrame header ldefs = do
@@ -147,6 +159,7 @@ createFrame header ldefs = do
 
 data NoAnnGroup i where
     NoAnnAst :: NoAnnGroup Ast
+    NoAnnIdentifier :: NoAnnGroup Identifier
     NoAnnFuncDef :: NoAnnGroup FuncDef
     NoAnnHeader :: NoAnnGroup Header
     NoAnnFparDef :: NoAnnGroup FparDef
@@ -180,6 +193,7 @@ view :: T r i -> View r i
 view y = case group y of
     GroupFuncIdentifier x -> FunctionView x
     GroupVarIdentifier x -> VariableView x
+    GroupIdentifier x -> NoAnnView x NoAnnIdentifier
     GroupAst x -> NoAnnView x NoAnnAst
     GroupFuncDef x -> NoAnnView x NoAnnFuncDef
     GroupHeader x -> NoAnnView x NoAnnHeader
@@ -198,13 +212,13 @@ view y = case group y of
 newtype Renamer f i = Renamer { getRenamer :: Compose (State Context) (Validation [Error]) (f i) }
 
 renameHeaderFDef :: Text -> Term (T :&&: Ann) FuncDef -> Term (T :&&: Ann) FuncDef
-renameHeaderFDef t (FuncDef (Header _ x y :&&.: z) k l :&&.: m) = FuncDef (Header t x y :&&.: z) k l :&&.: m
+renameHeaderFDef t (FuncDef (Header (Identifier _ :&&.: s) x y :&&.: z) k l :&&.: m) = FuncDef (Header (Identifier t :&&.: s) x y :&&.: z) k l :&&.: m
 
 renameHeaderFDecl :: Text -> Term (T :&&: Ann) FuncDecl -> Term (T :&&: Ann) FuncDecl
-renameHeaderFDecl t (FuncDecl (Header _ x y :&&.: z) :&&.: m) = FuncDecl (Header t x y :&&.: z) :&&.: m
+renameHeaderFDecl t (FuncDecl (Header (Identifier _ :&&.: s) x y :&&.: z) :&&.: m) = FuncDecl (Header (Identifier t :&&.: s) x y :&&.: z) :&&.: m
 
 renameLoopLabel :: Text -> Term (T :&&: Ann) Stmt -> Term (T :&&: Ann) Stmt
-renameLoopLabel t (StmtLoop (Just _) xs :&&.: y) = StmtLoop (Just t) xs :&&.: y
+renameLoopLabel t (StmtLoop (Just (Identifier _ :&&.: s)) xs :&&.: y) = StmtLoop (Just (Identifier t :&&.: s)) xs :&&.: y
 renameLoopLabel _ x = x
 
 renameAlg :: RAlg (T :&: SourceSpan) (Renamer (Term (T :&&: Ann))) 
@@ -238,7 +252,7 @@ renameAlg (t :&: s) =
             res <- getCompose $ fmap (renameHeaderFDecl name') $ defaultCase f p
             modify $ declareFunction name' typ
             pure res
-        NoAnnView l@(StmtLoop (Just name) _) p -> Renamer $ Compose $ do
+        NoAnnView l@(StmtLoop (Just ((Identifier name :&.: s') :*: _)) _) p -> Renamer $ Compose $ do
             found <- gets $ elem name . labels
             if not found 
                 then do
@@ -246,17 +260,17 @@ renameAlg (t :&: s) =
                     modify (\r -> r { labels = name : labels r })
                     locally $ getCompose $ fmap (renameLoopLabel name') $ defaultCase l p
                 else
-                    pure $ Failure [AlreadyDefinedLabel name s]
-        NoAnnView (StmtBreak (Just name)) p -> Renamer $ Compose $ do
+                    pure $ Failure [AlreadyDefinedLabel name s']
+        NoAnnView (StmtBreak (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of
-                Nothing -> pure $ Failure [UndefinedLabel name s]
-                Just name' -> pure $ Success $ StmtBreak (Just name') :&&.: NoAnn s p
-        NoAnnView (StmtContinue (Just name)) p -> Renamer $ Compose $ do
+                Nothing -> pure $ Failure [UndefinedLabel name s']
+                Just name' -> pure $ Success $ StmtBreak (Just (Identifier name' :&&.: NoAnn s' NoAnnIdentifier)) :&&.: NoAnn s p
+        NoAnnView (StmtContinue (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of
-                Nothing -> pure $ Failure [UndefinedLabel name s]
-                Just name' -> pure $ Success $ StmtContinue (Just name') :&&.: NoAnn s p
+                Nothing -> pure $ Failure [UndefinedLabel name s']
+                Just name' -> pure $ Success $ StmtContinue (Just (Identifier name' :&&.: NoAnn s' NoAnnIdentifier)) :&&.: NoAnn s p
         NoAnnView x p -> Renamer $ defaultCase x p
     where defaultCase x p = fmap (:&&.: NoAnn s p) $ htraverse (getRenamer . fsnd) x
 

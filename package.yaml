@@ -26,6 +26,7 @@ library:
   - template-haskell
   - llvm-hs-pure
   - bytestring
+  - errata
 
 executables:
   danac:
@@ -50,3 +51,4 @@ executables:
     - directory
     - process
     - unix
+    - errata

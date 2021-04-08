@@ -49,6 +49,7 @@ data Eval i where
 
 data NoEvalGroup i where
     NoEvalAst :: NoEvalGroup Ast
+    NoEvalIdentifier :: NoEvalGroup Identifier
     NoEvalFuncDef :: NoEvalGroup FuncDef
     NoEvalFparDef :: NoEvalGroup FparDef
     NoEvalLocalDef :: NoEvalGroup LocalDef
@@ -72,6 +73,7 @@ view :: T r i -> View r i
 view y = case group y of
     GroupFuncIdentifier x -> FunctionView x
     GroupVarIdentifier x -> VariableView x
+    GroupIdentifier x -> NoEvalView x NoEvalIdentifier
     GroupCondStmt x -> CondStmtView x
     GroupStmt x -> StmtView x
     GroupBlock x -> BlockView x
@@ -243,6 +245,7 @@ data NoAnnGroup i where
     NoAnnAst :: NoAnnGroup Ast
     NoAnnHeader :: NoAnnGroup Header
     NoAnnLvalue :: NoAnnGroup Lvalue
+    NoAnnIdentifier :: NoAnnGroup Identifier
     NoAnnFuncCall :: NoAnnGroup FuncCall
     NoAnnFuncDef :: NoAnnGroup FuncDef
     NoAnnFparDef :: NoAnnGroup FparDef
@@ -288,6 +291,7 @@ mergeAnns (RN.NoAnn s RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr s $ extractDataType
 mergeAnns (RN.NoAnn s RN.NoAnnHeader) (EvalHeader _ _) = NoAnn s NoAnnHeader
 mergeAnns (RN.NoAnn s RN.NoAnnLvalue) (EvalLvalue _ _) = NoAnn s NoAnnLvalue
 mergeAnns (RN.NoAnn s RN.NoAnnFuncCall) (EvalFuncCall _ _ _) = NoAnn s NoAnnFuncCall
+mergeAnns (RN.NoAnn s _) (NoEval NoEvalIdentifier) = NoAnn s NoAnnIdentifier
 mergeAnns (RN.NoAnn s _) (NoEval NoEvalAst) = NoAnn s NoAnnAst
 mergeAnns (RN.NoAnn s _) (NoEval NoEvalFuncDef) = NoAnn s NoAnnFuncDef
 mergeAnns (RN.NoAnn s _) (NoEval NoEvalFparDef) = NoAnn s NoAnnFparDef

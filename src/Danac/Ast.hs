@@ -22,6 +22,7 @@ data Ast
 data FuncDef 
 data Header 
 data FparDef 
+data Identifier
 data FuncIdentifier
 data VarIdentifier
 data LocalDef
@@ -45,13 +46,17 @@ data FunctionType = FunctionType (Maybe DataType) [FparType]
     deriving (Eq, Show)
 
 data T r i where
+    Identifier :: Text -> T r Identifier
+    FuncIdentifier :: Text -> T r FuncIdentifier
+    VarIdentifier :: Text -> T r VarIdentifier
+
     Ast :: r FuncDef -> T r Ast
 
     FuncDef :: r Header -> [r LocalDef] -> r Block -> T r FuncDef
 
-    Header :: Text -> Maybe DataType -> [r FparDef] -> T r Header
+    Header :: r Identifier -> Maybe DataType -> [r FparDef] -> T r Header
 
-    FparDef :: Text -> FparType -> T r FparDef
+    FparDef :: r Identifier -> FparType -> T r FparDef
 
     LocalDefFuncDef :: r FuncDef -> T r LocalDef
     LocalDefFuncDecl :: r FuncDecl -> T r LocalDef
@@ -59,7 +64,7 @@ data T r i where
 
     FuncDecl :: r Header -> T r FuncDecl
 
-    VarDef :: Text -> Type -> T r VarDef
+    VarDef :: r Identifier -> Type -> T r VarDef
 
     CondStmt :: r Cond -> r Block -> T r CondStmt
 
@@ -70,17 +75,13 @@ data T r i where
     StmtReturn :: r Expr -> T r Stmt
 
     StmtIf :: r CondStmt -> [r CondStmt] -> Maybe (r Block) -> T r Stmt
-    StmtLoop :: Maybe Text -> r Block -> T r Stmt
-    StmtBreak :: Maybe Text -> T r Stmt
-    StmtContinue :: Maybe Text -> T r Stmt
+    StmtLoop :: Maybe (r Identifier) -> r Block -> T r Stmt
+    StmtBreak :: Maybe (r Identifier) -> T r Stmt
+    StmtContinue :: Maybe (r Identifier) -> T r Stmt
 
     Block :: [r Stmt] -> T r Block
 
-    FuncIdentifier :: Text -> T r FuncIdentifier
-
     FuncCall :: r FuncIdentifier -> [r Expr] -> T r FuncCall
-
-    VarIdentifier :: Text -> T r VarIdentifier
     
     LvalueId :: r VarIdentifier -> T r Lvalue
     LvalueStr :: Text -> T r Lvalue
@@ -118,6 +119,7 @@ $(makeHTraversable ''T)
 $(makeShowHF' ''T)
 
 data Group r i where
+    GroupIdentifier :: T r Identifier -> Group r Identifier
     GroupAst :: T r Ast -> Group r Ast 
     GroupFuncDef :: T r FuncDef -> Group r FuncDef
     GroupHeader :: T r Header -> Group r Header
@@ -157,6 +159,7 @@ group x = case x of
     (StmtBreak _) -> GroupStmt x
     (StmtContinue _) -> GroupStmt x
     (Block _) -> GroupBlock x
+    (Identifier _) -> GroupIdentifier x
     (FuncIdentifier _) -> GroupFuncIdentifier x
     (FuncCall _ _) -> GroupFuncCall x
     (VarIdentifier _) -> GroupVarIdentifier x
