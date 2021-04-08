@@ -36,7 +36,7 @@ data Error = UndefinedVariable Text SourceSpan
            | UndefinedLabel Text SourceSpan
            | AlreadyDefinedVariable Text SourceSpan SourceSpan
            | AlreadyDefinedFunction Text SourceSpan
-           | AlreadyDefinedLabel Text SourceSpan
+           | AlreadyDefinedLabel Text SourceSpan SourceSpan
     deriving Show
 
 data VarType = Param FparType | Local Type
@@ -53,6 +53,11 @@ data FuncInfo = FuncInfo {
     ftype :: FunctionType
 }
 
+data LabelInfo = LabelInfo {
+    lname :: Text,
+    lspan :: SourceSpan
+}
+
 data Frame = Frame {
     functionName :: Text,
     functionType :: FunctionType,
@@ -63,7 +68,7 @@ data Frame = Frame {
 data Context = Context {
     frames :: [Frame],
     globals :: [FuncInfo],
-    labels :: [Text]
+    labels :: [LabelInfo]
 }
 
 emptyContext = Context { frames = [], 
@@ -114,9 +119,9 @@ lookFunction t c = case go 0 (frames c) of
                                          | otherwise -> go (n+1) fs'
 
 lookLabel :: Text -> Context -> Maybe Text
-lookLabel t c = case dropWhile (/= t) (labels c) of
+lookLabel t c = case dropWhile ((/= t).lname) (labels c) of
                      [] -> Nothing
-                     (x:xs) -> Just $ withNamespace x xs
+                     (x:xs) -> Just $ withNamespace (lname x) (fmap lname xs)
 
 getFparTypes :: [Term (T :&: SourceSpan) FparDef] -> [FparType]
 getFparTypes = fmap (\(FparDef _ t :&.: _) -> t)
@@ -253,14 +258,13 @@ renameAlg (t :&: s) =
             modify $ declareFunction name' typ
             pure res
         NoAnnView l@(StmtLoop (Just ((Identifier name :&.: s') :*: _)) _) p -> Renamer $ Compose $ do
-            found <- gets $ elem name . labels
-            if not found 
-                then do
-                    name' <- gets $ withNamespace name . labels
-                    modify (\r -> r { labels = name : labels r })
+            ml <- gets $ find ((== name) . lname) . labels
+            case ml of
+                Nothing -> do
+                    name' <- gets $ withNamespace name . fmap lname . labels
+                    modify (\r -> r { labels = LabelInfo { lname = name, lspan = s'} : labels r })
                     locally $ getCompose $ fmap (renameLoopLabel name') $ defaultCase l p
-                else
-                    pure $ Failure [AlreadyDefinedLabel name s']
+                Just l' -> pure $ Failure [AlreadyDefinedLabel name s' (lspan l')]
         NoAnnView (StmtBreak (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of

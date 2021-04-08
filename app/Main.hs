@@ -56,7 +56,7 @@ toErrata (UndefinedFunction _ sp) = toErrataHelper "error: undefined function" s
 toErrata (UndefinedLabel _ sp) = toErrataHelper "error: undefined label" sp
 toErrata (AlreadyDefinedVariable _ sp1 sp2) = toErrataHelper' "error: redefined variable" "redefined here" sp1  "variable originally defined here" sp2
 toErrata (AlreadyDefinedFunction _ sp) = toErrataHelper "error: redefined function" sp
-toErrata (AlreadyDefinedLabel _ sp) = toErrataHelper "error: redefined label" sp
+toErrata (AlreadyDefinedLabel _ sp1 sp2) = toErrataHelper' "error: redefined label" "redefined here" sp1 "label originally defined here" sp2
 
 data OptLevel = O0 | O1 | O2 | O3 | ON
 
