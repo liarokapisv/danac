@@ -11,6 +11,7 @@ library:
   - Danac.Util.SourceSpan
   - Danac.Util.Derive
   - Danac.Util.Helpers
+  - Danac.PrettyErrors
   - Danac.Parser
   - Danac.Renamer
   - Danac.TypeChecker
@@ -27,6 +28,7 @@ library:
   - llvm-hs-pure
   - bytestring
   - errata
+  - text-conversions
 
 executables:
   danac:

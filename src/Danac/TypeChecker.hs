@@ -18,6 +18,7 @@ import Danac.Util.SourceSpan
 import qualified Danac.Renamer as RN
 import Data.Text (Text, length)
 import Data.Maybe (maybeToList, catMaybes)
+import Data.List (find)
 import GHC.Show (appPrec, appPrec1)
 
 data LvalueType = LType Type | LPointer Type
@@ -42,9 +43,9 @@ data Eval i where
     EvalLvalue :: SourceSpan -> LvalueType -> Eval Lvalue
     EvalExpr :: SourceSpan -> ValueType -> Eval Expr
     EvalFuncCall :: SourceSpan -> Text -> Maybe DataType -> Eval FuncCall
-    EvalCondStmt :: Maybe (Maybe DataType) -> Eval CondStmt
-    EvalStmt :: Maybe (Maybe DataType) -> Eval Stmt
-    EvalBlock :: SourceSpan -> Maybe (Maybe DataType) -> Eval Block
+    EvalCondStmt :: Maybe (SourceSpan, Maybe DataType) -> Eval CondStmt
+    EvalStmt :: Maybe (SourceSpan, Maybe DataType) -> Eval Stmt
+    EvalBlock :: SourceSpan -> Maybe (SourceSpan, Maybe DataType) -> Eval Block
     NoEval :: !(NoEvalGroup i) -> Eval i
 
 data NoEvalGroup i where
@@ -91,17 +92,18 @@ view y = case group y of
 
 data Error = LvalueAxLhsWrongType SourceSpan LvalueType
            | LvalueAxRhsNotIntegral SourceSpan ValueType
-           | ExprIncompatibleTypes SourceSpan (SourceSpan, ValueType) (SourceSpan, ValueType)
+           | ExprIncompatibleTypes (SourceSpan, ValueType) (SourceSpan, ValueType)
            | ExprProcedureCallNotAllowed SourceSpan Text
            | FuncCallWrongNumberOfParameters SourceSpan Text FunctionType Integer
-           | FuncCallIncompatibleArg SourceSpan (Integer, FparType) (SourceSpan, ValueType)
+           | FuncCallIncompatibleArg (Integer, FparType) (SourceSpan, ValueType)
            | ReturnPointerType SourceSpan Type
            | ReturnArrayType SourceSpan Type Integer
            | PointerOnAssignLhs SourceSpan
            | ArrayOnAssignLhs SourceSpan
-           | AssignTypeMismatch SourceSpan (SourceSpan, LvalueType) (SourceSpan, ValueType)
-           | InconsistentReturnTypes SourceSpan
-           | NoReturnInFunctionWithReturnType SourceSpan (SourceSpan, DataType)
+           | AssignTypeMismatch (SourceSpan, LvalueType) (SourceSpan, ValueType)
+           | InconsistentReturnTypes (SourceSpan, Maybe DataType) (SourceSpan, Maybe DataType)
+           | ExitInFunctionWithReturnType SourceSpan (SourceSpan, DataType)
+           | NoReturnInFunctionWithReturnType (SourceSpan, DataType)
            | WrongReturnType SourceSpan (SourceSpan, DataType) (SourceSpan, DataType)
            | ReturnInFunctionWithNoReturnType SourceSpan (SourceSpan, DataType)
     deriving Show
@@ -160,7 +162,7 @@ typecheckAlg (w :&&: ann) =
                           binOp' :: SourceSpan -> Eval Expr -> Eval Expr -> Validated (Eval Expr)
                           binOp' s (EvalExpr sl tl) (EvalExpr sr tr) =
                                     case compatibleTypes tl tr of
-                                         Nothing -> Failure $ [ExprIncompatibleTypes s (sl, tl) (sr, tr)]
+                                         Nothing -> Failure $ [ExprIncompatibleTypes (sl, tl) (sr, tr)]
                                          Just dt -> Success $ EvalExpr s $ RValue dt
                           compatibleTypes :: ValueType -> ValueType -> Maybe DataType
                           compatibleTypes (RValue lhs) (RValue rhs) | lhs == rhs = Just lhs
@@ -178,7 +180,7 @@ typecheckAlg (w :&&: ann) =
                               areCompatible n _ [] = [FuncCallWrongNumberOfParameters s t ft n]
                               areCompatible n [] _ = [FuncCallWrongNumberOfParameters s t ft n]
                               areCompatible n (f : fs) (EvalExpr _ vt : xs) | isCompatible f vt = areCompatible (n+1) fs xs
-                              areCompatible n (f : fs) (EvalExpr sr vt : xs) | otherwise = FuncCallIncompatibleArg s (n, f) (sr, vt) : areCompatible (n+1) fs xs
+                              areCompatible n (f : fs) (EvalExpr sr vt : xs) | otherwise = FuncCallIncompatibleArg (n, f) (sr, vt) : areCompatible (n+1) fs xs
                               isCompatible (Ref l) (LValue (LType (DType r))) = l == r
                               isCompatible (Ref _) _ = False
                               isCompatible (Value (DType l)) (RValue r) = l == r
@@ -196,29 +198,29 @@ typecheckAlg (w :&&: ann) =
                     StmtBreak _ -> F $ Success $ EvalStmt Nothing
                     StmtContinue _ -> F $ Success $ EvalStmt Nothing
                     StmtProcCall (F c) -> F $ fmap (\(EvalFuncCall _ _ _) -> EvalStmt Nothing) c
-                    StmtExit -> F $ Success $ EvalStmt (Just Nothing)
+                    StmtExit -> F $ Success $ EvalStmt (Just (s, Nothing))
                     StmtReturn (F e) -> F $ bindValidation (validRetType <$> e) id
                         where validRetType :: Eval Expr -> Validated (Eval Stmt)
-                              validRetType (EvalExpr _ (RValue dt)) = Success $ EvalStmt (Just $ Just dt)
+                              validRetType (EvalExpr sr (RValue dt)) = Success $ EvalStmt (Just (sr, Just dt))
                               validRetType (EvalExpr _ (LValue (LPointer t))) = Failure $ [ReturnPointerType s t]
                               validRetType (EvalExpr _ (LValue (LType (AType t i)))) = Failure $ [ReturnArrayType s t i]
-                              validRetType (EvalExpr _ (LValue (LType (DType dt)))) = Success $ EvalStmt (Just $ Just dt)
+                              validRetType (EvalExpr sr (LValue (LType (DType dt)))) = Success $ EvalStmt (Just (sr, Just dt))
                     StmtLoop _ (F b) -> F $ fmap (\(EvalBlock _ mdt) -> EvalStmt mdt) b
                     StmtAssign (F lhs) (F rhs) -> F $ bindValidation (go <$> lhs <*> rhs) id
                         where go :: Eval Lvalue -> Eval Expr -> Validated (Eval Stmt)
                               go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (RValue r)) | l == r = Success $ EvalStmt Nothing
                               go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (LValue (LType (DType r)))) | l == r = Success $ EvalStmt Nothing
-                              go (EvalLvalue sl tl) (EvalExpr sr tr) = Failure $ [AssignTypeMismatch s (sl,tl) (sr,tr)]
+                              go (EvalLvalue sl tl) (EvalExpr sr tr) = Failure $ [AssignTypeMismatch (sl,tl) (sr,tr)]
                     StmtIf (F c) cs mb -> F $ bindValidation (go <$> c <*> traverse unF cs <*> traverse unF mb) id
                         where go :: Eval CondStmt -> [Eval CondStmt] -> Maybe (Eval Block) -> Validated (Eval Stmt)
                               go (EvalCondStmt x) ys mz = 
-                                case validStmts s (catMaybes $ [x] ++ fmap (\(EvalCondStmt t) -> t) ys ++ maybeToList (fmap (\(EvalBlock _ t) -> t) mz)) of
+                                case validStmts (catMaybes $ [x] ++ fmap (\(EvalCondStmt t) -> t) ys ++ maybeToList (fmap (\(EvalBlock _ t) -> t) mz)) of
                                     Left err -> Failure $ [err]
                                     Right mdt -> Success $ EvalStmt mdt
         CondStmtView (CondStmt _ (F b)) -> F $ fmap (\(EvalBlock _ t) -> EvalCondStmt t) b
         BlockView (Block stmts) -> 
             let RN.NoAnn s _ = ann
-                go xs = case validStmts s (catMaybes $ fmap (\(EvalStmt t) -> t) xs) of
+                go xs = case validStmts (catMaybes $ fmap (\(EvalStmt t) -> t) xs) of
                                     Left err -> Failure $ [err]
                                     Right mdt -> Success $ EvalBlock s mdt
                     in F $ bindValidation (go <$> traverse unF stmts) id
@@ -227,19 +229,21 @@ typecheckAlg (w :&&: ann) =
         NoEvalView (FuncDef (F h) lds (F b)) p -> 
             let RN.NoAnn s _ = ann 
                 go :: Eval Header -> [Eval LocalDef] -> Eval Block -> Validated (Eval FuncDef)
-                go (EvalHeader _ (Just x)) _ (EvalBlock _ (Just (Just y))) | x == y = Success $ NoEval p
-                go (EvalHeader sl (Just x)) _ (EvalBlock sr (Just (Just y))) | otherwise = Failure $ [WrongReturnType s (sl, x) (sr, y)]
-                go (EvalHeader sl (Just x)) _ (EvalBlock _ (Just Nothing)) = Failure $ [NoReturnInFunctionWithReturnType s (sl, x)]
-                go (EvalHeader _ Nothing) _ (EvalBlock _ (Just Nothing)) = Success $ NoEval p
-                go (EvalHeader _ Nothing) _ (EvalBlock sr (Just (Just y))) = Failure $ [ReturnInFunctionWithNoReturnType s (sr, y)]
+                go (EvalHeader _ (Just x)) _ (EvalBlock _ (Just (_, Just y))) | x == y = Success $ NoEval p
+                go (EvalHeader sl (Just x)) _ (EvalBlock _ (Just (sr, Just y))) | otherwise = Failure $ [WrongReturnType s (sl, x) (sr, y)]
+                go (EvalHeader sl (Just x)) _ (EvalBlock _ (Just (sr,Nothing))) = Failure $ [ExitInFunctionWithReturnType sr (sl, x)]
+                go (EvalHeader _ Nothing) _ (EvalBlock _ (Just (_,Nothing))) = Success $ NoEval p
+                go (EvalHeader sl Nothing) _ (EvalBlock _ (Just (sr,Just y))) = Failure $ [ReturnInFunctionWithNoReturnType sr (sl, y)]
                 go (EvalHeader _ Nothing) _ (EvalBlock _ Nothing) = Success $ NoEval p
-                go (EvalHeader sl (Just x)) _ (EvalBlock _ Nothing) = Failure $ [NoReturnInFunctionWithReturnType s (sl, x)]
+                go (EvalHeader sl (Just x)) _ (EvalBlock _ Nothing) = Failure $ [NoReturnInFunctionWithReturnType (sl, x)]
                     in F $ bindValidation (go <$> h <*> traverse unF lds <*> b) id
         NoEvalView x p -> F $ htraverse unF x *> (Success $ NoEval p)
-        where validStmts :: SourceSpan -> [Maybe DataType] -> Either Error (Maybe (Maybe DataType))
-              validStmts _ [] = Right Nothing
-              validStmts _ (t : xs) | all (==t) xs = Right $ Just t
-              validStmts s _ = Left $ InconsistentReturnTypes s
+        where validStmts :: [(SourceSpan, Maybe DataType)] -> Either Error (Maybe (SourceSpan, Maybe DataType))
+              validStmts [] = Right Nothing
+              validStmts (x@(s, t) : xs) =
+                case find ((/= t).snd) xs of
+                    Nothing -> Right $ Just (s, t)
+                    Just y -> Left $ InconsistentReturnTypes x y
 
 data NoAnnGroup i where
     NoAnnAst :: NoAnnGroup Ast
@@ -258,25 +262,22 @@ data NoAnnGroup i where
     NoAnnBlock :: NoAnnGroup Block
 
 data Ann i where
-    AnnVariable :: SourceSpan -> Text -> Int -> Int -> RN.VarType -> Ann VarIdentifier
-    AnnFunction :: SourceSpan -> Maybe Int -> FunctionType -> Ann FuncIdentifier
-    AnnExpr :: SourceSpan -> Maybe DataType -> Ann Expr
-    NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
+    AnnVariable :: Text -> Int -> Int -> RN.VarType -> Ann VarIdentifier
+    AnnFunction :: Maybe Int -> FunctionType -> Ann FuncIdentifier
+    AnnExpr :: Maybe DataType -> Ann Expr
+    NoAnn :: !(NoAnnGroup i) -> Ann i
 
 instance Show (Ann i) where
-    showsPrec p (AnnVariable a b c d e) = showParen (p > appPrec) $ 
+    showsPrec p (AnnVariable a b c d) = showParen (p > appPrec) $ 
                                               showString "AnnVariable " .  showsPrec appPrec1 a . 
                                               showString " " .  showsPrec appPrec1 b . 
                                               showString " " .  showsPrec appPrec1 c . 
-                                              showString " " .  showsPrec appPrec1 d .
-                                              showString " " .  showsPrec appPrec1 e
-    showsPrec p (AnnFunction a b c ) = showParen (p > appPrec) $
+                                              showString " " .  showsPrec appPrec1 d
+    showsPrec p (AnnFunction a b) = showParen (p > appPrec) $
                                            showString "AnnFunction " .  showsPrec appPrec1 a .
-                                           showString " " .  showsPrec appPrec1 b .
-                                           showString " " .  showsPrec appPrec1 c
-    showsPrec p (AnnExpr a b) = showParen (p > appPrec) $ 
-                                    showString "AnnFunction " .  showsPrec appPrec1 a .
-                                    showString " " .  showsPrec appPrec1 b
+                                           showString " " .  showsPrec appPrec1 b
+    showsPrec p (AnnExpr a) = showParen (p > appPrec) $ 
+                                    showString "AnnFunction " .  showsPrec appPrec1 a
     showsPrec _ _ = showString ""
 
 extractDataType :: ValueType -> Maybe DataType
@@ -285,23 +286,23 @@ extractDataType (LValue (LType (DType t))) = Just t
 extractDataType _ = Nothing
 
 mergeAnns :: RN.Ann i -> Eval i -> Ann i
-mergeAnns (RN.AnnVariable s (x, y, z, t)) (EvalVariable _ _) = AnnVariable s x y z t
-mergeAnns (RN.AnnFunction s (x, _)) (EvalFunction _ y) = AnnFunction s x y
-mergeAnns (RN.NoAnn s RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr s $ extractDataType t
-mergeAnns (RN.NoAnn s RN.NoAnnHeader) (EvalHeader _ _) = NoAnn s NoAnnHeader
-mergeAnns (RN.NoAnn s RN.NoAnnLvalue) (EvalLvalue _ _) = NoAnn s NoAnnLvalue
-mergeAnns (RN.NoAnn s RN.NoAnnFuncCall) (EvalFuncCall _ _ _) = NoAnn s NoAnnFuncCall
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalIdentifier) = NoAnn s NoAnnIdentifier
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalAst) = NoAnn s NoAnnAst
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalFuncDef) = NoAnn s NoAnnFuncDef
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalFparDef) = NoAnn s NoAnnFparDef
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalLocalDef) = NoAnn s NoAnnLocalDef
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalFuncDecl) = NoAnn s NoAnnFuncDecl
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalVarDef) = NoAnn s NoAnnVarDef
-mergeAnns (RN.NoAnn s _) (NoEval NoEvalCond) = NoAnn s NoAnnCond
-mergeAnns (RN.NoAnn s _) (EvalCondStmt _) = NoAnn s NoAnnCondStmt
-mergeAnns (RN.NoAnn s _) (EvalStmt _) = NoAnn s NoAnnStmt
-mergeAnns (RN.NoAnn s _) (EvalBlock _ _) = NoAnn s NoAnnBlock
+mergeAnns (RN.AnnVariable _ (x, y, z, t)) (EvalVariable _ _) = AnnVariable x y z t
+mergeAnns (RN.AnnFunction _ (x, _)) (EvalFunction _ y) = AnnFunction x y
+mergeAnns (RN.NoAnn _ RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr $ extractDataType t
+mergeAnns (RN.NoAnn _ RN.NoAnnHeader) (EvalHeader _ _) = NoAnn NoAnnHeader
+mergeAnns (RN.NoAnn _ RN.NoAnnLvalue) (EvalLvalue _ _) = NoAnn NoAnnLvalue
+mergeAnns (RN.NoAnn _ RN.NoAnnFuncCall) (EvalFuncCall _ _ _) = NoAnn NoAnnFuncCall
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalIdentifier) = NoAnn NoAnnIdentifier
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalAst) = NoAnn NoAnnAst
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalFuncDef) = NoAnn NoAnnFuncDef
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalFparDef) = NoAnn NoAnnFparDef
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalLocalDef) = NoAnn NoAnnLocalDef
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalFuncDecl) = NoAnn NoAnnFuncDecl
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalVarDef) = NoAnn NoAnnVarDef
+mergeAnns (RN.NoAnn _ _) (NoEval NoEvalCond) = NoAnn NoAnnCond
+mergeAnns (RN.NoAnn _ _) (EvalCondStmt _) = NoAnn NoAnnCondStmt
+mergeAnns (RN.NoAnn _ _) (EvalStmt _) = NoAnn NoAnnStmt
+mergeAnns (RN.NoAnn _ _) (EvalBlock _ _) = NoAnn NoAnnBlock
 
 typecheck :: Term (T :&&: RN.Ann) i -> Either [Error] (Term (T :&&: Ann) i)
 typecheck x = case (unF $ extend bindValidation typecheckAlg x) of

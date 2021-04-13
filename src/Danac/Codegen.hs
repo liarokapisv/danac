@@ -184,7 +184,7 @@ getFrameElement frame n offset = do
     gep f [int32 0 , int32 $ toInteger offset]
 
 codegenVarId :: (MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) VarIdentifier -> m LLVM.Operand
-codegenVarId frame (VarIdentifier _ :&&.: TC.AnnVariable _ f links offset vt) = do
+codegenVarId frame (VarIdentifier _ :&&.: TC.AnnVariable f links offset vt) = do
     p <- getFrameElement frame links (offset + (hasParent f :: Int))
     case vt of
         RN.Param (Value (DType _)) -> pure p
@@ -201,13 +201,13 @@ codegenLvalue _ (LvalueStr x :&&.: _) = do
     name <- freshName  $ toShort $ encodeUtf8 x
     c <- globalStringPtr (unpack x) name
     pure $ LLVM.ConstantOperand c
-codegenLvalue frame (LvalueAx l@(LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Param (Pointer _))) :&&.: _) e :&&.: _) = do
+codegenLvalue frame (LvalueAx l@(LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ (RN.Param (Pointer _))) :&&.: _) e :&&.: _) = do
     l' <- codegenLvalue frame l
     e' <- codegenExprLoad frame e
     gep l' [e']
-codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Param (Value (DType _)))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
-codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Local (DType _ ))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
-codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ _ (RN.Param (Ref _))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
+codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ (RN.Param (Value (DType _)))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
+codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ (RN.Local (DType _ ))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
+codegenLvalue _ (LvalueAx (LvalueId (VarIdentifier _ :&&.: TC.AnnVariable _ _ _ (RN.Param (Ref _))) :&&.: _) _ :&&.: _) = error "Internal compiler error on LvalueAx"
 codegenLvalue frame (LvalueAx l e :&&.: _) = do
     l' <- codegenLvalue frame l
     e' <- codegenExprLoad frame e
@@ -221,7 +221,7 @@ codegenExprWithTag frame x@(ExprLvalue _ :&&.: _) = codegenExpr frame x >>= pure
 codegenExprWithTag frame x = codegenExpr frame x >>= pure . (Temporary,)
 
 codegenFuncCall :: (MonadState Env m, MonadIRBuilder m, MonadModuleBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) FuncCall -> m LLVM.Operand
-codegenFuncCall frame (FuncCall (FuncIdentifier text :&&.: TC.AnnFunction _ mlinks (FunctionType _ fts)) es :&&.: _) = do
+codegenFuncCall frame (FuncCall (FuncIdentifier text :&&.: TC.AnnFunction mlinks (FunctionType _ fts)) es :&&.: _) = do
     f <- lookupFunction $ LLVM.Name $ toShort $ encodeUtf8 text
     es' <- for es $ codegenExprWithTag frame
     es'' <- for (zip fts es') $ \(ft, (tag, e)) -> 
@@ -256,46 +256,46 @@ codegenExpr frame (ExprSub x y :&&.: _) = join (sub <$> codegenExprLoad frame x 
 codegenExpr frame (ExprMul x y :&&.: _) = join (mul <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 codegenExpr frame (ExprDiv x y :&&.: _) = join (udiv <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
 codegenExpr frame (ExprMod x y :&&.: _) = join (urem <$> codegenExprLoad frame x <*> codegenExprLoad frame y)
-codegenExpr frame (ExprNot x :&&.: TC.AnnExpr _ (Just Integ)) = join (icmp IP.EQ (int32 0) <$> codegenExprLoad frame x)
-codegenExpr frame (ExprNot x :&&.: TC.AnnExpr _ (Just Byte)) = join (icmp IP.EQ (int8 0) <$> codegenExprLoad frame x)
-codegenExpr _ (ExprNot _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler error on ExprNot - missing type from typechecking stage"
-codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr _ (Just Integ)) = do
+codegenExpr frame (ExprNot x :&&.: TC.AnnExpr (Just Integ)) = join (icmp IP.EQ (int32 0) <$> codegenExprLoad frame x)
+codegenExpr frame (ExprNot x :&&.: TC.AnnExpr (Just Byte)) = join (icmp IP.EQ (int8 0) <$> codegenExprLoad frame x)
+codegenExpr _ (ExprNot _ :&&.: TC.AnnExpr Nothing) = error "Internal compiler error on ExprNot - missing type from typechecking stage"
+codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr (Just Integ)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
     x'' <- icmp NE (int32 0) x'
     y'' <- icmp NE (int32 0) y'
     z <- I.and x'' y''
     icmp NE (int32 0) z
-codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr _ (Just Byte)) = do
+codegenExpr frame (ExprAnd x y :&&.: TC.AnnExpr (Just Byte)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
     x'' <- icmp NE (int8 0) x'
     y'' <- icmp NE (int8 0) y'
     z <- I.and x'' y''
     icmp NE (int8 0) z
-codegenExpr _ (ExprAnd _ _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler error on ExprAnd - missing type from typechecking stage"
-codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr _ (Just Integ)) = do
+codegenExpr _ (ExprAnd _ _ :&&.: TC.AnnExpr Nothing) = error "Internal compiler error on ExprAnd - missing type from typechecking stage"
+codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr (Just Integ)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
     x'' <- icmp NE (int32 0) x'
     y'' <- icmp NE (int32 0) y'
     z <- I.and x'' y''
     icmp NE (int32 0) z
-codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr _ (Just Byte)) = do
+codegenExpr frame (ExprOr x y :&&.: TC.AnnExpr (Just Byte)) = do
     x' <- codegenExprLoad frame x
     y' <- codegenExprLoad frame y
     x'' <- icmp NE (int8 0) x'
     y'' <- icmp NE (int8 0) y'
     z <- I.and x'' y''
     icmp NE (int8 0) z
-codegenExpr _ (ExprOr _ _ :&&.: TC.AnnExpr _ Nothing) = error "Internal compiler error on ExprOr - missing type from typechecking stage"
+codegenExpr _ (ExprOr _ _ :&&.: TC.AnnExpr Nothing) = error "Internal compiler error on ExprOr - missing type from typechecking stage"
 codegenExpr _ (ExprTrue :&&.: _) = pure $ int8 1
 codegenExpr _ (ExprFalse :&&.: _) = pure $ int8 0
 
 codegenCond :: (MonadState Env m, MonadModuleBuilder m, MonadIRBuilder m) => LLVM.Operand -> Term (T :&&: TC.Ann) Cond -> m LLVM.Operand
-codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Integ)) :&&.: _) = join (icmp IP.NE (int32 0) <$> codegenExprLoad frame x)
-codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr _ (Just Byte)) :&&.: _) = join (icmp IP.NE (int8 0) <$> codegenExprLoad frame x)
-codegenCond _ (CondExpr (_ :&&.: TC.AnnExpr _ Nothing) :&&.: _) = error "Internal compiler error on CondExpr - missing type from typechecking stage"
+codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr (Just Integ)) :&&.: _) = join (icmp IP.NE (int32 0) <$> codegenExprLoad frame x)
+codegenCond frame (CondExpr x@(_ :&&.: TC.AnnExpr (Just Byte)) :&&.: _) = join (icmp IP.NE (int8 0) <$> codegenExprLoad frame x)
+codegenCond _ (CondExpr (_ :&&.: TC.AnnExpr Nothing) :&&.: _) = error "Internal compiler error on CondExpr - missing type from typechecking stage"
 codegenCond frame (CondNot x :&&.: _) = join (I.xor (bit 1) <$> codegenCond frame x)
 codegenCond frame (CondOr x y:&&.: _) = join (I.or <$> codegenCond frame x <*> codegenCond frame y)
 codegenCond frame (CondAnd x y:&&.: _) = join (I.and <$> codegenCond frame x <*> codegenCond frame y)

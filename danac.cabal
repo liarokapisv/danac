@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3f6814957ef1b2c81904be6f33821e3dc0e1707467c31bd6fe06d3e60d579db3
+-- hash: f2c6ca84c6c4872433c9081244458143f013ffbf698f6baba8b6eaf638082773
 
 name:           danac
 version:        0.0.0
@@ -17,6 +17,7 @@ library
       Danac.Util.SourceSpan
       Danac.Util.Derive
       Danac.Util.Helpers
+      Danac.PrettyErrors
       Danac.Parser
       Danac.Renamer
       Danac.TypeChecker
@@ -37,6 +38,7 @@ library
     , parser-combinators
     , template-haskell
     , text
+    , text-conversions
     , validation
   default-language: Haskell2010
 
