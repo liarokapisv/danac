@@ -1,0 +1,4 @@
+def main
+    def foo: a as int, b as byte
+        skip
+    foo: 'x', 0

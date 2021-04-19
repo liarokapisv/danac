@@ -1,0 +1,2 @@
+def main: s as int[]
+   return: s 

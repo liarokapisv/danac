@@ -1,0 +1,4 @@
+def main is int
+    var s is int[50]
+    var c is byte
+    return: s[c]

@@ -1,0 +1,6 @@
+def main
+    def foo
+        skip
+    def foo
+        skip
+    skip

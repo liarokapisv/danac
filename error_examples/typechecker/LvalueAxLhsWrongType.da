@@ -1,0 +1,3 @@
+def main is int
+    var s is int
+    return: s[0]

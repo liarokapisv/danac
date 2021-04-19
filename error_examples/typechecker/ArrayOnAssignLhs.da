@@ -1,0 +1,3 @@
+def main
+   var s is int[100]
+   s := s

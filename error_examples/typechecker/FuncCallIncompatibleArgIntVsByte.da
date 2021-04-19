@@ -1,0 +1,4 @@
+def main
+    def foo: s as byte
+        skip
+    foo: 0

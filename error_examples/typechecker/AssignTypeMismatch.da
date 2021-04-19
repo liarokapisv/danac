@@ -1,0 +1,4 @@
+def main
+    var i is int
+    var c is byte
+    i := c

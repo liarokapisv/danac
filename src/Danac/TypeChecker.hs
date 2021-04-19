@@ -98,8 +98,8 @@ data Error = LvalueAxLhsWrongType SourceSpan LvalueType
            | FuncCallIncompatibleArg (Integer, FparType) (SourceSpan, ValueType)
            | ReturnPointerType SourceSpan Type
            | ReturnArrayType SourceSpan Type Integer
-           | PointerOnAssignLhs SourceSpan
-           | ArrayOnAssignLhs SourceSpan
+           | PointerOnAssignLhs SourceSpan Type
+           | ArrayOnAssignLhs SourceSpan Type Integer
            | AssignTypeMismatch (SourceSpan, LvalueType) (SourceSpan, ValueType)
            | InconsistentReturnTypes (SourceSpan, Maybe DataType) (SourceSpan, Maybe DataType)
            | ExitInFunctionWithReturnType SourceSpan (SourceSpan, DataType)
@@ -177,8 +177,8 @@ typecheckAlg (w :&&: ann) =
                                 [] -> Success $ EvalFuncCall s t mdt
                                 errs -> Failure errs
                         where areCompatible _ [] [] = []
+                              areCompatible n [] xs = [FuncCallWrongNumberOfParameters s t ft (n + toInteger (Prelude.length xs))]
                               areCompatible n _ [] = [FuncCallWrongNumberOfParameters s t ft n]
-                              areCompatible n [] _ = [FuncCallWrongNumberOfParameters s t ft n]
                               areCompatible n (f : fs) (EvalExpr _ vt : xs) | isCompatible f vt = areCompatible (n+1) fs xs
                               areCompatible n (f : fs) (EvalExpr sr vt : xs) | otherwise = FuncCallIncompatibleArg (n, f) (sr, vt) : areCompatible (n+1) fs xs
                               isCompatible (Ref l) (LValue (LType (DType r))) = l == r
@@ -202,14 +202,16 @@ typecheckAlg (w :&&: ann) =
                     StmtReturn (F e) -> F $ bindValidation (validRetType <$> e) id
                         where validRetType :: Eval Expr -> Validated (Eval Stmt)
                               validRetType (EvalExpr sr (RValue dt)) = Success $ EvalStmt (Just (sr, Just dt))
-                              validRetType (EvalExpr _ (LValue (LPointer t))) = Failure $ [ReturnPointerType s t]
-                              validRetType (EvalExpr _ (LValue (LType (AType t i)))) = Failure $ [ReturnArrayType s t i]
+                              validRetType (EvalExpr sr (LValue (LPointer t))) = Failure $ [ReturnPointerType sr t]
+                              validRetType (EvalExpr sr (LValue (LType (AType t i)))) = Failure $ [ReturnArrayType sr t i]
                               validRetType (EvalExpr sr (LValue (LType (DType dt)))) = Success $ EvalStmt (Just (sr, Just dt))
                     StmtLoop _ (F b) -> F $ fmap (\(EvalBlock _ mdt) -> EvalStmt mdt) b
                     StmtAssign (F lhs) (F rhs) -> F $ bindValidation (go <$> lhs <*> rhs) id
                         where go :: Eval Lvalue -> Eval Expr -> Validated (Eval Stmt)
                               go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (RValue r)) | l == r = Success $ EvalStmt Nothing
                               go (EvalLvalue _ (LType (DType l))) (EvalExpr _ (LValue (LType (DType r)))) | l == r = Success $ EvalStmt Nothing
+                              go (EvalLvalue sl (LType (AType t i))) _ = Failure $ [ArrayOnAssignLhs sl t i]
+                              go (EvalLvalue sl (LPointer t)) _ = Failure $ [PointerOnAssignLhs sl t]
                               go (EvalLvalue sl tl) (EvalExpr sr tr) = Failure $ [AssignTypeMismatch (sl,tl) (sr,tr)]
                     StmtIf (F c) cs mb -> F $ bindValidation (go <$> c <*> traverse unF cs <*> traverse unF mb) id
                         where go :: Eval CondStmt -> [Eval CondStmt] -> Maybe (Eval Block) -> Validated (Eval Stmt)

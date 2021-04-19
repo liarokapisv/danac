@@ -1,0 +1,4 @@
+def main: k as int[]
+    def foo: s as int[10]
+        skip
+    foo: k

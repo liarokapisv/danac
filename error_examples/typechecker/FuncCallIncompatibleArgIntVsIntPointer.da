@@ -1,0 +1,4 @@
+def main
+    def foo: s as int[]
+        skip
+    foo: 0

@@ -1,0 +1,4 @@
+def main
+    loop foo:
+        loop foo:
+            skip
