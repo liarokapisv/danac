@@ -17,8 +17,8 @@ import Data.Char (isSpace)
 import Data.Bifunctor (bimap)
 import Data.Text.Conversions (convertText)
 
-toErrataHelper :: T.Text -> T.Text -> Maybe T.Text -> SourceSpan -> Errata
-toErrataHelper text msg mt (SS (MP.SourcePos fp l1 c1) (MP.SourcePos _ l2 c2)) =
+oneLens :: T.Text -> T.Text -> Maybe T.Text -> SourceSpan -> Errata
+oneLens text msg mt (SS (MP.SourcePos fp l1 c1) (MP.SourcePos _ l2 c2)) =
     errataSimple (Just msg)
         (Block 
             fancyRedStyle 
@@ -29,23 +29,25 @@ toErrataHelper text msg mt (SS (MP.SourcePos fp l1 c1) (MP.SourcePos _ l2 c2)) =
         )
         Nothing
 
-toErrataHelper' :: T.Text -> T.Text -> Maybe T.Text -> SourceSpan -> Maybe T.Text -> SourceSpan -> Errata
-toErrataHelper' text msg mt1 (SS (MP.SourcePos fp l11 c11) (MP.SourcePos _ l12 c12)) mt2 (SS (MP.SourcePos _ l21 c21) (MP.SourcePos _ l22 c22)) =
+twoLensesMaybeConnected :: T.Text -> T.Text -> Bool -> Maybe T.Text -> SourceSpan -> Maybe T.Text -> SourceSpan -> Errata
+twoLensesMaybeConnected text msg b mt1 (SS (MP.SourcePos fp l11 c11) (MP.SourcePos _ l12 c12)) mt2 (SS (MP.SourcePos _ l21 c21) (MP.SourcePos _ l22 c22)) =
     errataSimple (Just msg)
         (Block
             fancyRedStyle
             (fp, MP.unPos l11, MP.unPos c11)
             Nothing
-            ((spanToPointers False (MP.unPos l11, MP.unPos c11) (MP.unPos l12, MP.unPos c12) mt1 text) <>
-            (spanToPointers False (MP.unPos l21, MP.unPos c21) (MP.unPos l22, MP.unPos c22) mt2 text))
+            ((spanToPointers b (MP.unPos l11, MP.unPos c11) (MP.unPos l12, MP.unPos c12) mt1 text) <>
+            (spanToPointers b (MP.unPos l21, MP.unPos c21) (MP.unPos l22, MP.unPos c22) mt2 text))
             Nothing
         )
         Nothing
 
+twoLensesNotConnected text msg = twoLensesMaybeConnected text msg False
+twoLensesConnected text msg = twoLensesMaybeConnected text msg True
 
-toErrataHelper'' :: T.Text -> T.Text -> Maybe SourceSpan -> Maybe T.Text -> SourceSpan -> Errata
-toErrataHelper'' text msg Nothing mt2 sp2 = toErrataHelper text msg mt2 sp2
-toErrataHelper'' text msg (Just (SS (MP.SourcePos fp l11 c11) (MP.SourcePos _ l12 c12))) mt2 (SS (MP.SourcePos _ l21 c21) (MP.SourcePos _ l22 c22)) =
+maybeTwoLensesConnected :: T.Text -> T.Text -> Maybe SourceSpan -> Maybe T.Text -> SourceSpan -> Errata
+maybeTwoLensesConnected text msg Nothing mt2 sp2 = oneLens text msg mt2 sp2
+maybeTwoLensesConnected text msg (Just (SS (MP.SourcePos fp l11 c11) (MP.SourcePos _ l12 c12))) mt2 (SS (MP.SourcePos _ l21 c21) (MP.SourcePos _ l22 c22)) =
     errataSimple (Just msg)
         (Block
             fancyRedStyle
@@ -58,15 +60,15 @@ toErrataHelper'' text msg (Just (SS (MP.SourcePos fp l11 c11) (MP.SourcePos _ l1
         Nothing
 
 errorRNToErrata :: T.Text -> RN.Error -> Errata
-errorRNToErrata text (RN.UndefinedVariable _ sp) = toErrataHelper text "error: undefined variable" Nothing sp
-errorRNToErrata text (RN.UndefinedFunction _ sp) = toErrataHelper text "error: undefined function" Nothing sp
-errorRNToErrata text (RN.UndefinedLabel _ sp) = toErrataHelper text "error: undefined label" Nothing sp
-errorRNToErrata text (RN.AlreadyDefinedVariable _ sp1 sp2) = toErrataHelper' text "error: redefined variable" (Just "redefined here") sp1  (Just "variable originally defined here") sp2
-errorRNToErrata text (RN.AlreadyDefinedFunction _ sp Nothing) = toErrataHelper text "error: redefined standard library function" Nothing sp
-errorRNToErrata text (RN.AlreadyDefinedFunction _ sp1 (Just sp2)) = toErrataHelper' text "error: redefined function" (Just "redefined here") sp1 (Just "function originally defined here") sp2
-errorRNToErrata text (RN.AlreadyDefinedLabel _ sp1 sp2) = toErrataHelper' text "error: redefined label" (Just "redefined here") sp1 (Just "label originally defined here") sp2
-errorRNToErrata text (RN.BreakUsedOutOfLoop sp) = toErrataHelper text "error: break used outside of loop" Nothing sp
-errorRNToErrata text (RN.ContinueUsedOutOfLoop sp) = toErrataHelper text "error: continue used outside of loop" Nothing sp
+errorRNToErrata text (RN.UndefinedVariable _ sp) = oneLens text "error: undefined variable" Nothing sp
+errorRNToErrata text (RN.UndefinedFunction _ sp) = oneLens text "error: undefined function" Nothing sp
+errorRNToErrata text (RN.UndefinedLabel _ sp) = oneLens text "error: undefined label" Nothing sp
+errorRNToErrata text (RN.AlreadyDefinedVariable _ sp1 sp2) = twoLensesNotConnected text "error: redefined variable" (Just "redefined here") sp1  (Just "variable originally defined here") sp2
+errorRNToErrata text (RN.AlreadyDefinedFunction _ sp Nothing) = oneLens text "error: redefined standard library function" Nothing sp
+errorRNToErrata text (RN.AlreadyDefinedFunction _ sp1 (Just sp2)) = twoLensesNotConnected text "error: redefined function" (Just "redefined here") sp1 (Just "function originally defined here") sp2
+errorRNToErrata text (RN.AlreadyDefinedLabel _ sp1 sp2) = twoLensesNotConnected text "error: redefined label" (Just "redefined here") sp1 (Just "label originally defined here") sp2
+errorRNToErrata text (RN.BreakUsedOutOfLoop sp) = oneLens text "error: invalid break" (Just "break used outside of loop") sp
+errorRNToErrata text (RN.ContinueUsedOutOfLoop sp) = oneLens text "error: invalid continue" (Just "continue used outside of loop") sp
 
 prettyRNErrors :: T.Text -> [RN.Error] -> LT.Text
 prettyRNErrors text = prettyErrors text . fmap (errorRNToErrata text)
@@ -93,46 +95,39 @@ prettyFparType (A.Pointer t) = prettyType t <> "[]"
 
 errorTCToErrata :: T.Text -> TC.Error -> Errata
 errorTCToErrata text (TC.LvalueAxLhsWrongType sp t) =
-    toErrataHelper text "error: accessing non-array lvalue" (Just $ "is of type " <> prettyLvalueType t) sp 
+    oneLens text "error: invalid access" (Just $ "type " <> prettyLvalueType t <> " is not accessible") sp 
 errorTCToErrata text (TC.LvalueAxRhsNotIntegral sp t) =
-    toErrataHelper text "error: array index is not integral" (Just $ "is of type " <> prettyValueType t) sp 
+    oneLens text "error: invalid indexing" (Just $ "is of type " <> prettyValueType t <> ", should be int") sp 
 errorTCToErrata text (TC.ExprIncompatibleTypes (sp1, dt1) (sp2, dt2)) =
-    toErrataHelper' text "error: incompatible expression types" (Just $ "is of type " <> prettyValueType dt1) sp1 (Just $ "is of type " <> prettyValueType dt2) sp2
+    twoLensesNotConnected text "error: incompatible expressions" (Just $ "is of type " <> prettyValueType dt1) sp1 (Just $ "is of type " <> prettyValueType dt2) sp2
 errorTCToErrata text (TC.ExprProcedureCallNotAllowed sp _) =
-    toErrataHelper text "error: can't call a procedure in an expression" (Just "calling a procedure")  sp
-errorTCToErrata text (TC.FuncCallWrongNumberOfParameters sp t (A.FunctionType _ p) i mhs) =
-    toErrataHelper'' text "error: wrong number of arguments" mhs (Just $ t <> " expects " <> convertText (show $ length p) <> " parameters, called with " <> convertText (show i)) sp
+    oneLens text "error: invalid procedure call" (Just "calling a procedure in an expression")  sp
+errorTCToErrata text (TC.FuncCallWrongNumberOfParameters sp (A.FunctionType _ p) i mhs) =
+    maybeTwoLensesConnected text "error: wrong number of arguments" mhs (Just $ " expected " <> convertText (show $ length p) <> " parameters, called with " <> convertText (show i)) sp
 errorTCToErrata text (TC.FuncCallIncompatibleArg (_, fpt@(A.Ref _)) (sp, vt@(TC.RValue _)) mhs) =
-    toErrataHelper'' text "error: wrong argument" mhs (Just $ "expected reference of type " <> prettyFparType fpt <> ", got rvalue of type " <> prettyValueType vt) sp
+    maybeTwoLensesConnected text "error: wrong argument" mhs (Just $ "expected reference of type " <> prettyFparType fpt <> ", got rvalue of type " <> prettyValueType vt) sp
 errorTCToErrata text (TC.FuncCallIncompatibleArg (_, fpt@(A.Ref _)) (sp, vt@(TC.LValue _)) mhs) =
-    toErrataHelper'' text "error: wrong argument" mhs (Just $ "expected reference of type " <> prettyFparType fpt <> ", got lvalue of type " <> prettyValueType vt) sp
+    maybeTwoLensesConnected text "error: wrong argument" mhs (Just $ "expected reference of type " <> prettyFparType fpt <> ", got lvalue of type " <> prettyValueType vt) sp
 errorTCToErrata text (TC.FuncCallIncompatibleArg (_, fpt) (sp, vt) mhs) =
-    toErrataHelper'' text "error: wrong argument" mhs (Just $ "expected " <> prettyFparType fpt <> ", got " <> prettyValueType vt) sp
-errorTCToErrata text (TC.ReturnPointerType sp _) = 
-    toErrataHelper text "error: can't return expression of pointer type" Nothing sp
-errorTCToErrata text (TC.ReturnArrayType sp _ _) = 
-    toErrataHelper text "error: can't return expression of array type" Nothing sp
+    maybeTwoLensesConnected text "error: wrong argument" mhs (Just $ "expected " <> prettyFparType fpt <> ", got " <> prettyValueType vt) sp
 errorTCToErrata text (TC.PointerOnAssignLhs sp t) =   
-    toErrataHelper text "error: can't assign to variable of array type" (Just $ "is of type " <> prettyLvalueType (TC.LPointer t)) sp
+    oneLens text "error: invalid assignment" (Just $ "can't assign to variable of type " <> prettyLvalueType (TC.LPointer t)) sp
 errorTCToErrata text (TC.ArrayOnAssignLhs sp t i) =   
-    toErrataHelper text "error: can't assign to variable of array type" (Just $ "is of type " <> prettyType (A.AType t i)) sp
+    oneLens text "error: invalid assignment" (Just $ "can't assign to variable of type " <> prettyType (A.AType t i)) sp
 errorTCToErrata text (TC.AssignTypeMismatch (sp1, tp1) (sp2, tp2)) =   
-    toErrataHelper' text "error: assignment type mismatch" (Just $ "is of type " <> prettyLvalueType tp1) sp1 (Just $ "is of type " <> prettyValueType tp2) sp2
-errorTCToErrata _ (TC.InconsistentReturnTypes (_, Nothing) (_, Nothing)) = error "Internal compiler error - inconsistent return type on exits"
-errorTCToErrata text (TC.InconsistentReturnTypes (sp1, Nothing) (sp2, Just tp)) =   
-    toErrataHelper' text "error: inconsistent return types" (Just "exit has no type") sp1 (Just $ "is of type " <> prettyDataType tp) sp2
-errorTCToErrata text (TC.InconsistentReturnTypes (sp1, Just tp) (sp2, Nothing)) =   
-    toErrataHelper' text "error: inconsistent return types" (Just $ "is of type " <> prettyDataType tp) sp1 (Just "exit has no type") sp2
-errorTCToErrata text (TC.InconsistentReturnTypes (sp1, Just l) (sp2, Just r)) =   
-    toErrataHelper' text "error: inconsistent return types" (Just $ "is of type " <> prettyDataType l) sp1 (Just $ "is of type " <> prettyDataType r) sp2
-errorTCToErrata text (TC.ExitInFunctionWithReturnType sp (hsp, _)) =   
-    toErrataHelper' text "error: exit used inside function" (Just "exit used here") sp (Just "return required") hsp
-errorTCToErrata text (TC.NoReturnInFunctionWithReturnType (hsp, t)) =   
-    toErrataHelper text "error: no return used inside function" (Just $ "expects a return of type " <> prettyDataType t)  hsp
-errorTCToErrata text (TC.WrongReturnType _ (sp1, dt1) (sp2, dt2)) = 
-    toErrataHelper' text "error: wrong return type" (Just $ "required type is " <> prettyDataType dt1) sp1 (Just $ "actual type is " <> prettyDataType dt2) sp2
-errorTCToErrata text (TC.ReturnInFunctionWithNoReturnType sp (hsp, _)) =   
-    toErrataHelper' text "error: return used in procedure" (Just "return used here") sp (Just "exit required") hsp
+    twoLensesNotConnected text "error: assignment type mismatch" (Just $ "is of type " <> prettyLvalueType tp1) sp1 (Just $ "is of type " <> prettyValueType tp2) sp2
+errorTCToErrata text (TC.ReturnPointerType (hs, rt) (sp, pt)) = 
+    twoLensesConnected text "error: wrong return type" (Just $ "expected return of type" <> prettyDataType rt) hs (Just $  "is of type " <> prettyLvalueType (TC.LPointer pt)) sp
+errorTCToErrata text (TC.ReturnArrayType (hs, rt) (sp, at, i)) = 
+    twoLensesConnected text "error: wrong return type" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "is of type " <> prettyType (A.AType at i)) sp
+errorTCToErrata text (TC.ExitInFunctionWithReturnType (hs, rt) sp) =
+    twoLensesConnected text "error: invalid exit" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "exit used") sp
+errorTCToErrata text (TC.NoReturnInFunctionWithReturnType (hs, rt)) =   
+    oneLens text "error: missing return" (Just $ "expected return of type " <> prettyDataType rt <> " but none was found") hs
+errorTCToErrata text (TC.WrongReturnType (hs, rt) (sp2, dt2)) = 
+    twoLensesConnected text "error: wrong return type" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "is of type " <> prettyDataType dt2) sp2
+errorTCToErrata text (TC.ReturnInFunctionWithNoReturnType hs (sp, vt)) =   
+    twoLensesConnected text "error: invalid return" (Just "expected exit") hs (Just $ "is return of type " <> prettyValueType vt) sp
 
 prettyTCErrors :: T.Text -> [TC.Error] -> LT.Text
 prettyTCErrors text = prettyErrors text . fmap (errorTCToErrata text)
