@@ -279,7 +279,7 @@ instance Show (Ann i) where
                                            showString "AnnFunction " .  showsPrec appPrec1 a .
                                            showString " " .  showsPrec appPrec1 b
     showsPrec p (AnnExpr a) = showParen (p > appPrec) $ 
-                                    showString "AnnFunction " .  showsPrec appPrec1 a
+                                    showString "AnnExpr " .  showsPrec appPrec1 a
     showsPrec _ _ = showString ""
 
 extractDataType :: ValueType -> Maybe DataType
