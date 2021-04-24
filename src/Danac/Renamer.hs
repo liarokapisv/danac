@@ -36,6 +36,8 @@ data Error = UndefinedVariable Text SourceSpan
            | AlreadyDefinedVariable Text SourceSpan SourceSpan
            | AlreadyDefinedFunction Text SourceSpan (Maybe SourceSpan)
            | AlreadyDefinedLabel Text SourceSpan SourceSpan
+           | BreakUsedOutOfLoop SourceSpan
+           | ContinueUsedOutOfLoop SourceSpan
     deriving Show
 
 data VarType = Param FparType | Local Type
@@ -267,11 +269,21 @@ renameAlg (t :&: s) =
                     modify (\r -> r { labels = LabelInfo { lname = name, lspan = s'} : labels r })
                     locally $ getCompose $ fmap (renameLoopLabel name') $ defaultCase l p
                 Just l' -> pure $ Failure [AlreadyDefinedLabel name s' (lspan l')]
+        NoAnnView (StmtBreak Nothing) p -> Renamer $ Compose $ do
+            ls <- gets labels
+            case ls of
+                [] -> pure $ Failure [BreakUsedOutOfLoop s]
+                _ -> pure $ Success $ StmtBreak Nothing :&&.: NoAnn s p
         NoAnnView (StmtBreak (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of
                 Nothing -> pure $ Failure [UndefinedLabel name s']
                 Just name' -> pure $ Success $ StmtBreak (Just (Identifier name' :&&.: NoAnn s' NoAnnIdentifier)) :&&.: NoAnn s p
+        NoAnnView (StmtContinue Nothing) p -> Renamer $ Compose $ do
+            ls <- gets labels
+            case ls of
+                [] -> pure $ Failure [ContinueUsedOutOfLoop s]
+                _ -> pure $ Success $ StmtContinue Nothing :&&.: NoAnn s p
         NoAnnView (StmtContinue (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of

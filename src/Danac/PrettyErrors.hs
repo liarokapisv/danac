@@ -50,6 +50,8 @@ errorRNToErrata text (RN.AlreadyDefinedVariable _ sp1 sp2) = toErrataHelper' tex
 errorRNToErrata text (RN.AlreadyDefinedFunction _ sp Nothing) = toErrataHelper text "error: redefined standard library function" Nothing sp
 errorRNToErrata text (RN.AlreadyDefinedFunction _ sp1 (Just sp2)) = toErrataHelper' text "error: redefined function" "redefined here" sp1 "function originally defined here" sp2
 errorRNToErrata text (RN.AlreadyDefinedLabel _ sp1 sp2) = toErrataHelper' text "error: redefined label" "redefined here" sp1 "label originally defined here" sp2
+errorRNToErrata text (RN.BreakUsedOutOfLoop sp) = toErrataHelper text "error: break used outside of loop" Nothing sp
+errorRNToErrata text (RN.ContinueUsedOutOfLoop sp) = toErrataHelper text "error: continue used outside of loop" Nothing sp
 
 prettyRNErrors :: T.Text -> [RN.Error] -> LT.Text
 prettyRNErrors text = prettyErrors text . fmap (errorRNToErrata text)
