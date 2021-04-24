@@ -63,6 +63,7 @@ data LabelInfo = LabelInfo {
 data Frame = Frame {
     functionName :: Text,
     functionType :: FunctionType,
+    headerSpan :: SourceSpan,
     variables :: [VarInfo],
     functions :: [FuncInfo]
 }
@@ -108,16 +109,16 @@ declareFunction n t s c =
     where appendFunction :: Frame -> Frame
           appendFunction f = f { functions = FuncInfo { fname = n, ftype = t, fspan = Just s } : functions f }
 
-lookFunction :: Text -> Context -> Maybe (Text, Maybe Int, FunctionType)
+lookFunction :: Text -> Context -> Maybe (Text, Maybe Int, Maybe SourceSpan, FunctionType)
 lookFunction t c = case go 0 (frames c) of
                         Just n -> Just n
                         Nothing -> case find ((==t).fname) (globals c) of
-                                      Just (FuncInfo { ftype = typ }) -> Just (t, Nothing, typ)
+                                      Just (FuncInfo { ftype = typ, fspan = sp }) -> Just (t, Nothing, sp, typ)
                                       Nothing -> Nothing
     where go _ [] = Nothing
           go n fs@(f : fs') = case find ((==t).fname) (functions f) of
-                                 Just (FuncInfo { ftype = typ }) -> Just $ (withNamespace t (fmap functionName fs), Just n, typ)
-                                 Nothing | t == functionName f -> Just (withNamespace t (fmap functionName fs'), Just (n+1), functionType f)
+                                 Just (FuncInfo { ftype = typ, fspan = sp }) -> Just $ (withNamespace t (fmap functionName fs), Just n, sp, typ)
+                                 Nothing | t == functionName f -> Just (withNamespace t (fmap functionName fs'), Just (n+1), Just (headerSpan f), functionType f)
                                          | otherwise -> go (n+1) fs'
 
 lookLabel :: Text -> Context -> Maybe Text
@@ -131,11 +132,11 @@ getFparTypes = fmap (\(FparDef _ t :&.: _) -> t)
 headerToType :: Term (T :&: SourceSpan) Header -> FunctionType
 headerToType (Header _ dt fdefs :&.: _) = FunctionType dt $ getFparTypes fdefs
 
-extractName :: Term (T :&: SourceSpan) Header -> (Text, SourceSpan)
-extractName (Header (Identifier t :&.: s) _ _ :&.: _) = (t, s)
+extractName :: Term (T :&: SourceSpan) Header -> Text
+extractName (Header (Identifier t :&.: _) _ _ :&.: _) = t
                 
-collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, SourceSpan, FunctionType, [VarInfo])
-collectHeaderVarNames h@(Header (Identifier name :&.: s) _ fdefs :&.: _) = fmap (name, s, headerToType h,) $ go [] fdefs
+collectHeaderVarNames :: Term (T :&: SourceSpan) Header -> Either Error (Text, FunctionType, [VarInfo])
+collectHeaderVarNames h@(Header (Identifier name :&.: s) _ fdefs :&.: _) = fmap (name, headerToType h,) $ go [] fdefs
     where go :: [VarInfo] -> [Term (T :&: SourceSpan) FparDef] -> Either Error [VarInfo]
           go ns [] = Right ns
           go ns (FparDef (Identifier n' :&.: s') t :&.: _ : fs) = 
@@ -146,24 +147,24 @@ collectHeaderVarNames h@(Header (Identifier name :&.: s) _ fdefs :&.: _) = fmap 
 
 collectLocalNames :: ([VarInfo],[FuncInfo]) -> [Term (T :&: SourceSpan) LocalDef] -> Either Error ([VarInfo],[FuncInfo])
 collectLocalNames (vars,fns) [] = Right (vars, fns)
-collectLocalNames (vars,fns) (LocalDefFuncDef (FuncDef h@(Header (Identifier t :&.: s) _ _ :&.: _) _ _ :&.: _) :&.: _ : ds) =
+collectLocalNames (vars,fns) (LocalDefFuncDef (FuncDef h@(Header (Identifier t :&.: s) _ _ :&.: hs) _ _ :&.: _) :&.: _ : ds) =
     case find ((==t).fname) fns of
         Just f -> Left $ AlreadyDefinedFunction t s (fspan f)
-        Nothing -> collectLocalNames (vars,(FuncInfo { fname = t, ftype = headerToType h, fspan = Just s } : fns)) ds
-collectLocalNames (vars,fns) (LocalDefFuncDecl (FuncDecl h@(Header (Identifier t :&.: s) _ _ :&.: _) :&.: _) :&.: _ : ds) =
+        Nothing -> collectLocalNames (vars,(FuncInfo { fname = t, ftype = headerToType h, fspan = Just hs } : fns)) ds
+collectLocalNames (vars,fns) (LocalDefFuncDecl (FuncDecl h@(Header (Identifier t :&.: s) _ _ :&.: hs) :&.: _) :&.: _ : ds) =
     case find ((==t).fname) fns of
         Just f -> Left $ AlreadyDefinedFunction t s (fspan f)
-        Nothing -> collectLocalNames (vars,(FuncInfo { fname = t, ftype = headerToType h, fspan = Just s } : fns)) ds
+        Nothing -> collectLocalNames (vars,(FuncInfo { fname = t, ftype = headerToType h, fspan = Just hs } : fns)) ds
 collectLocalNames (vars,fns) (LocalDefVarDef (VarDef (Identifier name :&.: _) t :&.: s) :&.: _ : ds) =
     case find ((==name).vname) vars of
         Just v -> Left $ AlreadyDefinedVariable name s (vspan v)
         Nothing -> collectLocalNames ((VarInfo {vname = name, vtype = Local t, vspan = s } : vars),fns) ds
 
-createFrame :: Term (T :&: SourceSpan) Header -> [Term (T :&: SourceSpan) LocalDef] -> Either Error (Text, SourceSpan, Frame)
-createFrame header ldefs = do
-    (name, s, typ, vars1) <- collectHeaderVarNames header
+createFrame :: Term (T :&: SourceSpan) Header -> [Term (T :&: SourceSpan) LocalDef] -> Either Error (Text, Frame)
+createFrame header@(_ :&.: hs) ldefs = do
+    (name, typ, vars1) <- collectHeaderVarNames header
     (vars2, fns) <- collectLocalNames (vars1,[]) ldefs
-    pure $ (name, s, Frame { functionName = name, functionType = typ, variables = reverse vars2, functions = reverse fns })
+    pure $ (name, Frame { functionName = name, functionType = typ, headerSpan = hs, variables = reverse vars2, functions = reverse fns })
 
 
 data NoAnnGroup i where
@@ -185,13 +186,13 @@ data NoAnnGroup i where
 
 data Ann i where
     AnnVariable :: SourceSpan -> (Text, Int, Int, VarType) -> Ann VarIdentifier
-    AnnFunction :: SourceSpan -> (Maybe Int, FunctionType) -> Ann FuncIdentifier
+    AnnFunction :: SourceSpan -> (Maybe Int, Maybe SourceSpan, FunctionType) -> Ann FuncIdentifier
     NoAnn :: SourceSpan -> !(NoAnnGroup i) -> Ann i
 
 instance Show (Ann i) where
     showsPrec p (AnnVariable x y) = showParen (p > appPrec) $ showString "AnnVariable " . showsPrec appPrec1 x . showsPrec appPrec1 y
     showsPrec p (AnnFunction x y) = showParen (p > appPrec) $ showString "AnnFunction " . showsPrec appPrec1 x . showsPrec appPrec1 y
-    showsPrec _ _ = showString ""
+    showsPrec _ (NoAnn s _) = showsPrec appPrec1 s
 
 data View r i where
     VariableView :: T r VarIdentifier -> View r VarIdentifier
@@ -242,24 +243,24 @@ renameAlg (t :&: s) =
             mf <- gets $ lookFunction name 
             case mf of
                 Nothing -> pure $ Failure [UndefinedFunction name s]
-                Just (name',n,typ) -> pure $ Success $ (FuncIdentifier name' :&&.: AnnFunction s (n,typ))
-        NoAnnView f@(FuncDef (header :*: _) ldefs _) p -> Renamer $ Compose $ do
+                Just (name',n,s',typ) -> pure $ Success $ (FuncIdentifier name' :&&.: AnnFunction s (n,s',typ))
+        NoAnnView f@(FuncDef (header@(_ :&.: hs) :*: _) ldefs _) p -> Renamer $ Compose $ do
             let mframe = createFrame header (fmap ffst ldefs)
             case mframe of
                 Left e -> pure $ Failure [e]
-                Right (name, s', frame) -> do
+                Right (name, frame) -> do
                     name' <- gets $ withNamespace name . fmap functionName . frames
-                    modify $ declareFunction name' (functionType frame) s'
+                    modify $ declareFunction name' (functionType frame) hs
                     res <- locally $ do
                             modify (\r -> r { frames = frame : frames r})
                             getCompose $ fmap (renameHeaderFDef name') $ defaultCase f p
                     pure res
-        NoAnnView f@(FuncDecl (header :*: _)) p -> Renamer $ Compose $ do
-            let (name, s') = extractName header
+        NoAnnView f@(FuncDecl (header@(_ :&.: hs) :*: _)) p -> Renamer $ Compose $ do
+            let name = extractName header
             name' <- gets $ withNamespace name . fmap functionName . frames
             let typ = headerToType header
             res <- getCompose $ fmap (renameHeaderFDecl name') $ defaultCase f p
-            modify $ declareFunction name' typ s'
+            modify $ declareFunction name' typ hs
             pure res
         NoAnnView l@(StmtLoop (Just ((Identifier name :&.: s') :*: _)) _) p -> Renamer $ Compose $ do
             ml <- gets $ find ((== name) . lname) . labels

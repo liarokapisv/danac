@@ -39,7 +39,7 @@ parToLvalue (Ref x) = LType (DType x)
 data Eval i where
     EvalVariable :: SourceSpan -> RN.VarType -> Eval VarIdentifier
     EvalHeader :: SourceSpan -> Maybe DataType -> Eval Header
-    EvalFunction :: Text -> FunctionType -> Eval FuncIdentifier
+    EvalFunction :: Text -> Maybe SourceSpan -> FunctionType -> Eval FuncIdentifier
     EvalLvalue :: SourceSpan -> LvalueType -> Eval Lvalue
     EvalExpr :: SourceSpan -> ValueType -> Eval Expr
     EvalFuncCall :: SourceSpan -> Text -> Maybe DataType -> Eval FuncCall
@@ -94,8 +94,8 @@ data Error = LvalueAxLhsWrongType SourceSpan LvalueType
            | LvalueAxRhsNotIntegral SourceSpan ValueType
            | ExprIncompatibleTypes (SourceSpan, ValueType) (SourceSpan, ValueType)
            | ExprProcedureCallNotAllowed SourceSpan Text
-           | FuncCallWrongNumberOfParameters SourceSpan Text FunctionType Integer
-           | FuncCallIncompatibleArg (Integer, FparType) (SourceSpan, ValueType)
+           | FuncCallWrongNumberOfParameters SourceSpan Text FunctionType Integer (Maybe SourceSpan)
+           | FuncCallIncompatibleArg (Integer, FparType) (SourceSpan, ValueType) (Maybe SourceSpan)
            | ReturnPointerType SourceSpan Type
            | ReturnArrayType SourceSpan Type Integer
            | PointerOnAssignLhs SourceSpan Type
@@ -118,7 +118,7 @@ typecheckAlg (w :&&: ann) =
         VariableView _ -> case ann of
                             RN.AnnVariable s (_,_,_, t) -> F $ Success $ EvalVariable s t
         FunctionView (FuncIdentifier n) -> case ann of
-                            RN.AnnFunction _ (_,t) -> F $ Success $ EvalFunction n t
+                            RN.AnnFunction _ (_,s',t) -> F $ Success $ EvalFunction n s' t
         LvalueView (LvalueId (F t)) -> F $ fmap (\(EvalVariable s x) -> EvalLvalue s $ toLvalueType x) t
         LvalueView (LvalueStr t) -> let RN.NoAnn s _ = ann in F $ Success $ EvalLvalue s $ LType $ AType (DType Byte) (toInteger (Data.Text.length t) + 1)
         LvalueView (LvalueAx (F l) (F i)) -> F $ bindValidation (go <$> l <*> i) id
@@ -172,15 +172,15 @@ typecheckAlg (w :&&: ann) =
                           compatibleTypes _ _ = Nothing
         FuncCallView (FuncCall (F name) es)  -> let RN.NoAnn s _ = ann in F $ bindValidation (go s <$> name <*> (traverse unF es)) id
                 where go :: SourceSpan -> Eval FuncIdentifier -> [Eval Expr] -> Validated (Eval FuncCall)
-                      go s (EvalFunction t ft@(FunctionType mdt fts)) es' =
+                      go s (EvalFunction t s' ft@(FunctionType mdt fts)) es' =
                         case areCompatible 0 fts es' of
                                 [] -> Success $ EvalFuncCall s t mdt
                                 errs -> Failure errs
                         where areCompatible _ [] [] = []
-                              areCompatible n [] xs = [FuncCallWrongNumberOfParameters s t ft (n + toInteger (Prelude.length xs))]
-                              areCompatible n _ [] = [FuncCallWrongNumberOfParameters s t ft n]
+                              areCompatible n [] xs = [FuncCallWrongNumberOfParameters s t ft (n + toInteger (Prelude.length xs)) s']
+                              areCompatible n _ [] = [FuncCallWrongNumberOfParameters s t ft n s']
                               areCompatible n (f : fs) (EvalExpr _ vt : xs) | isCompatible f vt = areCompatible (n+1) fs xs
-                              areCompatible n (f : fs) (EvalExpr sr vt : xs) | otherwise = FuncCallIncompatibleArg (n, f) (sr, vt) : areCompatible (n+1) fs xs
+                              areCompatible n (f : fs) (EvalExpr sr vt : xs) | otherwise = FuncCallIncompatibleArg (n, f) (sr, vt) s' : areCompatible (n+1) fs xs
                               isCompatible (Ref l) (LValue (LType (DType r))) = l == r
                               isCompatible (Ref _) _ = False
                               isCompatible (Value (DType l)) (RValue r) = l == r
@@ -289,7 +289,7 @@ extractDataType _ = Nothing
 
 mergeAnns :: RN.Ann i -> Eval i -> Ann i
 mergeAnns (RN.AnnVariable _ (x, y, z, t)) (EvalVariable _ _) = AnnVariable x y z t
-mergeAnns (RN.AnnFunction _ (x, _)) (EvalFunction _ y) = AnnFunction x y
+mergeAnns (RN.AnnFunction _ (x, _, _)) (EvalFunction _ _ y) = AnnFunction x y
 mergeAnns (RN.NoAnn _ RN.NoAnnExpr) (EvalExpr _ t) = AnnExpr $ extractDataType t
 mergeAnns (RN.NoAnn _ RN.NoAnnHeader) (EvalHeader _ _) = NoAnn NoAnnHeader
 mergeAnns (RN.NoAnn _ RN.NoAnnLvalue) (EvalLvalue _ _) = NoAnn NoAnnLvalue
