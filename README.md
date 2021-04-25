@@ -97,11 +97,11 @@ Then we can also define our open-recursion base "Functor"
 
 ```haskell
 data ASTF r t where
-    NodeA1 :: X -> AST r NodeA
-    NodeA2 :: X -> r NodeY -> AST r NodeA
+    NodeA1 :: X -> ASTF r NodeA
+    NodeA2 :: X -> r NodeY -> ASTF r NodeA
 
-    NodeB1 :: X -> AST r NodeB
-    NodeB2 :: r NodeA -> AST r NodeB
+    NodeB1 :: X -> ASTF r NodeB
+    NodeB2 :: r NodeA -> ASTF r NodeB
     
     ...
 ```
