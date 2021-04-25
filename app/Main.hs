@@ -25,6 +25,7 @@ import qualified Data.ByteString.Char8 as B
 import System.Directory
 import System.Process
 import System.Posix.Temp
+import System.Exit (exitFailure)
 import Control.Exception (bracket)
 
 data OptLevel = O0 | O1 | O2 | O3 | ON
@@ -113,15 +114,18 @@ main = do
                   (fullDesc <> header "danac - Dana compiler")
     text <- TIO.readFile (input opts)
     case parse (input opts) text of
-        Left err -> putStr $ errorBundlePretty err
+        Left err -> do putStr $ errorBundlePretty err
+                       exitFailure
         Right pt | dumpParser opts -> pPrint pt
                  | otherwise ->  
                     case RN.rename pt of
-                        Left errors -> TLIO.putStr $ prettyRNErrors text errors
+                        Left errors -> do TLIO.putStr $ prettyRNErrors text errors
+                                          exitFailure
                         Right t | dumpRenamer opts -> pPrint t
                                 | otherwise -> 
                                     case TC.typecheck t of
-                                        Left errors -> TLIO.putStr $ prettyTCErrors text errors
+                                        Left errors -> do TLIO.putStr $ prettyTCErrors text errors
+                                                          exitFailure
                                         Right c | dumpTypeChecker opts -> pPrint c
                                                 | otherwise -> do
                                                        let m = codegen "test" c

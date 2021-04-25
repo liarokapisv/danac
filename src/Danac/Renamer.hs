@@ -71,7 +71,8 @@ data Frame = Frame {
 data Context = Context {
     frames :: [Frame],
     globals :: [FuncInfo],
-    labels :: [LabelInfo]
+    labels :: [LabelInfo],
+    inLoop :: Bool
 }
 
 emptyContext = Context { frames = [], 
@@ -89,7 +90,8 @@ emptyContext = Context { frames = [],
                                     FuncInfo { fname = "strcmp", ftype = FunctionType (Just Integ) [Pointer (DType Byte), Pointer (DType Byte)], fspan = Nothing },
                                     FuncInfo { fname = "strcpy", ftype = FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)], fspan = Nothing },
                                     FuncInfo { fname = "strcat", ftype = FunctionType Nothing [Pointer (DType Byte), Pointer (DType Byte)], fspan = Nothing }],
-                         labels=[] }
+                         labels=[],
+                         inLoop = False}
 
 withNamespace t names = mconcat $ intersperse "." $ reverse $ (t : names)
 
@@ -262,29 +264,37 @@ renameAlg (t :&: s) =
             res <- getCompose $ fmap (renameHeaderFDecl name') $ defaultCase f p
             modify $ declareFunction name' typ hs
             pure res
+        NoAnnView l@(StmtLoop Nothing _) p -> Renamer $ Compose $ do
+            locally $ do
+                modify $ \r -> r { inLoop = True }
+                getCompose $ defaultCase l p
         NoAnnView l@(StmtLoop (Just ((Identifier name :&.: s') :*: _)) _) p -> Renamer $ Compose $ do
             ml <- gets $ find ((== name) . lname) . labels
             case ml of
                 Nothing -> do
                     name' <- gets $ withNamespace name . fmap lname . labels
                     modify (\r -> r { labels = LabelInfo { lname = name, lspan = s'} : labels r })
-                    locally $ getCompose $ fmap (renameLoopLabel name') $ defaultCase l p
+                    locally $ do
+                        modify $ \r -> r { inLoop = True }
+                        getCompose $ fmap (renameLoopLabel name') $ defaultCase l p
                 Just l' -> pure $ Failure [AlreadyDefinedLabel name s' (lspan l')]
         NoAnnView (StmtBreak Nothing) p -> Renamer $ Compose $ do
-            ls <- gets labels
-            case ls of
-                [] -> pure $ Failure [BreakUsedOutOfLoop s]
-                _ -> pure $ Success $ StmtBreak Nothing :&&.: NoAnn s p
+            il <- gets inLoop
+            if il then
+                pure $ Success $ StmtBreak Nothing :&&.: NoAnn s p
+            else
+                pure $ Failure [BreakUsedOutOfLoop s]
         NoAnnView (StmtBreak (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of
                 Nothing -> pure $ Failure [UndefinedLabel name s']
                 Just name' -> pure $ Success $ StmtBreak (Just (Identifier name' :&&.: NoAnn s' NoAnnIdentifier)) :&&.: NoAnn s p
         NoAnnView (StmtContinue Nothing) p -> Renamer $ Compose $ do
-            ls <- gets labels
-            case ls of
-                [] -> pure $ Failure [ContinueUsedOutOfLoop s]
-                _ -> pure $ Success $ StmtContinue Nothing :&&.: NoAnn s p
+            il <- gets inLoop
+            if il then
+                pure $ Success $ StmtContinue Nothing :&&.: NoAnn s p
+            else
+                pure $ Failure [ContinueUsedOutOfLoop s]
         NoAnnView (StmtContinue (Just ((Identifier name :&.: s') :*: _))) p -> Renamer $ Compose $ do
             mlabel <- gets $ lookLabel name
             case mlabel of

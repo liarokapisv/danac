@@ -60,11 +60,11 @@ maybeTwoLensesConnected text msg (Just (SS (MP.SourcePos fp l11 c11) (MP.SourceP
         Nothing
 
 errorRNToErrata :: T.Text -> RN.Error -> Errata
-errorRNToErrata text (RN.UndefinedVariable _ sp) = oneLens text "error: undefined variable" Nothing sp
-errorRNToErrata text (RN.UndefinedFunction _ sp) = oneLens text "error: undefined function" Nothing sp
-errorRNToErrata text (RN.UndefinedLabel _ sp) = oneLens text "error: undefined label" Nothing sp
+errorRNToErrata text (RN.UndefinedVariable _ sp) = oneLens text "error: undefined variable" (Just "is undefined") sp
+errorRNToErrata text (RN.UndefinedFunction _ sp) = oneLens text "error: undefined function" (Just "is undefined") sp
+errorRNToErrata text (RN.UndefinedLabel _ sp) = oneLens text "error: undefined label" (Just "is undefined") sp
 errorRNToErrata text (RN.AlreadyDefinedVariable _ sp1 sp2) = twoLensesNotConnected text "error: redefined variable" (Just "redefined here") sp1  (Just "variable originally defined here") sp2
-errorRNToErrata text (RN.AlreadyDefinedFunction _ sp Nothing) = oneLens text "error: redefined standard library function" Nothing sp
+errorRNToErrata text (RN.AlreadyDefinedFunction _ sp Nothing) = oneLens text "error: redefined standard library function" (Just "is a standard library function") sp
 errorRNToErrata text (RN.AlreadyDefinedFunction _ sp1 (Just sp2)) = twoLensesNotConnected text "error: redefined function" (Just "redefined here") sp1 (Just "function originally defined here") sp2
 errorRNToErrata text (RN.AlreadyDefinedLabel _ sp1 sp2) = twoLensesNotConnected text "error: redefined label" (Just "redefined here") sp1 (Just "label originally defined here") sp2
 errorRNToErrata text (RN.BreakUsedOutOfLoop sp) = oneLens text "error: invalid break" (Just "break used outside of loop") sp
@@ -121,13 +121,13 @@ errorTCToErrata text (TC.ReturnPointerType (hs, rt) (sp, pt)) =
 errorTCToErrata text (TC.ReturnArrayType (hs, rt) (sp, at, i)) = 
     twoLensesConnected text "error: wrong return type" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "is of type " <> prettyType (A.AType at i)) sp
 errorTCToErrata text (TC.ExitInFunctionWithReturnType (hs, rt) sp) =
-    twoLensesConnected text "error: invalid exit" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "exit used") sp
+    twoLensesConnected text "error: invalid exit" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "got exit") sp
 errorTCToErrata text (TC.NoReturnInFunctionWithReturnType (hs, rt)) =   
     oneLens text "error: missing return" (Just $ "expected return of type " <> prettyDataType rt <> " but none was found") hs
 errorTCToErrata text (TC.WrongReturnType (hs, rt) (sp2, dt2)) = 
     twoLensesConnected text "error: wrong return type" (Just $ "expected return of type " <> prettyDataType rt) hs (Just $ "is of type " <> prettyDataType dt2) sp2
 errorTCToErrata text (TC.ReturnInFunctionWithNoReturnType hs (sp, vt)) =   
-    twoLensesConnected text "error: invalid return" (Just "expected exit") hs (Just $ "is return of type " <> prettyValueType vt) sp
+    twoLensesConnected text "error: invalid return" (Just "expected exit") hs (Just $ "got return of type " <> prettyValueType vt) sp
 
 prettyTCErrors :: T.Text -> [TC.Error] -> LT.Text
 prettyTCErrors text = prettyErrors text . fmap (errorTCToErrata text)
