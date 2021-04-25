@@ -3,7 +3,9 @@
 Danac is a compiler for the [Dana](https://courses.softlab.ntua.gr/compilers/2017a/dana2017.pdf) programming language created for the National Technical University of Athens' School of Electrical and Computer Engineering 2016-2017 compilers course. Dana is a minimal statically typed language only supporting primitive types. Main interesting features include optional identation-based syntax, nested functions with lexical scope and named loops.
 
 ## Building, installation and usage
-The project requires [stack](https://docs.haskellstack.org/en/stable/README/)
+
+The project requires either [stack](https://docs.haskellstack.org/en/stable/README/) or [cabal](https://www.haskell.org/cabal/).
+It also requires LLVM 9 to be available.
 
 In order to build invoke `stack build` on the root directory.
 
